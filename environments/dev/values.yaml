@@ -1,0 +1,20 @@
+environment: dev
+
+log:
+  level: debug
+
+replicaCount: 1
+pdb:
+  enabled: false
+
+# Dev is reached through a port-forward, not the public edge. The hostname is
+# still passed by the ApplicationSet, so turning this on is one line plus the
+# certificate and WAF ARNs from terraform/edge.
+ingress:
+  enabled: false
+
+serviceMonitor:
+  enabled: false
+
+prometheusRule:
+  enabled: false

@@ -1,0 +1,25 @@
+environment: staging
+
+log:
+  level: info
+
+replicaCount: 2
+pdb:
+  enabled: true
+
+# Turn this on after terraform/edge has a certificate and a WAF ACL, and after
+# the edge CNAME exists. The host comes from the registry, not from here.
+ingress:
+  enabled: false
+  certificateArn: ""
+  wafAclArn: ""
+  accessLogs:
+    bucket: ""
+    prefix: foundry
+
+# Turned on in P7, when the monitoring CRDs exist.
+serviceMonitor:
+  enabled: false
+
+prometheusRule:
+  enabled: false

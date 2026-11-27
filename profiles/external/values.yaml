@@ -1,0 +1,13 @@
+tier: external
+
+replicaCount: 2
+pdb:
+  enabled: true
+
+# The chart's tier guard refuses an external app with fewer than two replicas
+# or no PDB, so this file and the guard agree.
+serviceMonitor:
+  enabled: true
+
+prometheusRule:
+  enabled: true

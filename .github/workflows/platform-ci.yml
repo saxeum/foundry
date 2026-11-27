@@ -38,3 +38,12 @@ jobs:
 
       - name: Chart contract tests
         run: make charts-test
+
+      - name: Install yq
+        run: |
+          curl -fsSL https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64 -o /tmp/yq
+          sudo install -m 0755 /tmp/yq /usr/local/bin/yq
+          yq --version
+
+      - name: Argo tree
+        run: make check-argocd

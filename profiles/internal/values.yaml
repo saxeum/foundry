@@ -1,0 +1,12 @@
+tier: internal
+
+replicaCount: 2
+pdb:
+  enabled: true
+
+# The monitoring CRDs arrive in P7; the environment values turn these on.
+serviceMonitor:
+  enabled: false
+
+prometheusRule:
+  enabled: false

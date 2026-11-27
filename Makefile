@@ -12,7 +12,7 @@ CHARTS := charts/app-api charts/app-web
 STACK ?=
 TF_ARGS ?=
 
-.PHONY: help fmt fmt-check validate init plan apply charts-lint charts-test eks-tunnel eks-kubeconfig
+.PHONY: help fmt fmt-check validate init plan apply charts-lint charts-test check-argocd eks-tunnel eks-kubeconfig
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z0-9_.-]+:.*## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*## "}; {printf "  %-20s %s\n", $$1, $$2}'
@@ -50,6 +50,9 @@ charts-lint: ## Lint every chart with the contract values
 
 charts-test: ## Render every chart and assert the contract
 	./scripts/chart-test.sh
+
+check-argocd: ## Validate the registry, AppProjects and ApplicationSet
+	./scripts/check-argocd.sh
 
 # The EKS API is private. This is the only way to reach it from a laptop; leave
 # it running in its own terminal.
