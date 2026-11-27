@@ -1,0 +1,53 @@
+# Values for `helm lint` and the contract test. Not deployed.
+app:
+  name: app1
+  env:
+    FEATURE_EXAMPLE: "on"
+  secrets:
+    - name: app1-api
+      key: DATABASE_URL
+      env: DATABASE_URL
+
+image:
+  repository: example/app1-api
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+
+platform:
+  chartVersion: "0.1.0"
+
+environment: dev
+tier: internal
+replicaCount: 2
+
+ingress:
+  enabled: true
+  host: app1.foonix.net
+  certificateArn: arn:aws:acm:ap-southeast-2:000000000000:certificate/00000000-0000-0000-0000-000000000000
+  wafAclArn: arn:aws:wafv2:ap-southeast-2:000000000000:regional/webacl/foundry-edge/00000000-0000-0000-0000-000000000000
+  accessLogs:
+    bucket: foundry-alb-logs-000000000000
+    prefix: foundry
+
+pdb:
+  enabled: true
+
+migrations:
+  ownerSecret:
+    name: app1-owner
+
+caSecret:
+  name: app1-rds-ca
+
+externalSecrets:
+  - name: app1-api
+    secretStore: foundry-secrets
+    data:
+      - secretKey: DATABASE_URL
+        remoteRef:
+          key: foundry/dev/app1/app
+
+serviceMonitor:
+  enabled: true
+
+prometheusRule:
+  enabled: true
