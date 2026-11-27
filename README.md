@@ -5,7 +5,9 @@ Go module, the app template and the operational baseline. `app1` is the
 reference application built on it. `godough` is the application the platform was
 extracted from; it is frozen and nothing here imports it.
 
-**Status:** planning. Nothing here is applied to an account yet.
+**Status:** plan approved 2026-11-28. P1 (Terraform) in progress. Same AWS
+account as `godough`; see [`docs/plan.md`](docs/plan.md) §7.0 for the coexistence
+rules.
 
 Start here: [`docs/plan.md`](docs/plan.md).
 
