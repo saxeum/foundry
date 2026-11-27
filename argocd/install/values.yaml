@@ -17,10 +17,8 @@ notifications:
   enabled: false
 
 # The ApplicationSet controller has no switch in this chart version, so it runs
-# whether or not it is used. Two Applications are written by hand and reviewed in
-# git; an ApplicationSet earns its place when the number of them stops being
-# countable. Left as it ships rather than pinned to a version that would take it
-# away.
+# whether or not it is used. foundry's ApplicationSet is defined in argocd/apps
+# and reviewed in git.
 
 # No ingress and no TLS: the server is reachable only through `kubectl port-forward`,
 # so a self-signed certificate under that tunnel is a warning to click through on
