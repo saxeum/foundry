@@ -1,0 +1,27 @@
+name: platform-ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: "1.17.1"
+          terraform_wrapper: false
+
+      - name: Format
+        run: make fmt-check
+
+      # No AWS credentials and no backend: init with -backend=false, then
+      # validate. This is the gate that catches a broken reference before apply.
+      - name: Validate every stack
+        run: make validate
