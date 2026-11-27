@@ -21,7 +21,23 @@ data "aws_iam_policy_document" "alerts" {
       identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
     }
 
-    actions   = ["sns:*"]
+    # SNS rejects "sns:*" in a topic policy: every action must be an explicit,
+    # supported operation. This is the administrator's set; the account root
+    # keeps full access through IAM regardless.
+    actions = [
+      "sns:AddPermission",
+      "sns:DeleteTopic",
+      "sns:GetTopicAttributes",
+      "sns:ListSubscriptionsByTopic",
+      "sns:ListTagsForResource",
+      "sns:Publish",
+      "sns:Receive",
+      "sns:RemovePermission",
+      "sns:SetTopicAttributes",
+      "sns:Subscribe",
+      "sns:TagResource",
+      "sns:UntagResource",
+    ]
     resources = [aws_sns_topic.alerts.arn]
   }
 
