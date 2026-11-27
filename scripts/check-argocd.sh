@@ -18,7 +18,6 @@ trap 'rm -rf "$tmp"' EXIT
 # Plain YAML under argocd/ parses. The ApplicationSet is a Go template, so it is
 # rendered with one sample app first; the raw file is not valid YAML by design.
 while IFS= read -r file; do
-  [ "$file" = "argocd/clusters/staging/appset.yaml" ] && continue
   yq eval '.' "$file" >/dev/null || fail "parse $file"
 done < <(find argocd -name '*.yaml' -type f | sort)
 
@@ -31,7 +30,6 @@ import sys
 src = open(sys.argv[1]).read()
 # Take the web branch: the fixture app has a UI, and both chart sources must
 # parse. Control actions are removed; expressions are replaced with a sample.
-src = src.replace("{{- if .web }}", "").replace("{{- end }}", "")
 for key, value in {
     ".name": "app1",
     ".env": "dev",
@@ -175,6 +173,11 @@ yq -e '.spec.template.spec.sources[] | select(.ref == "foundry") | .targetRevisi
   || fail "foundry ref is pinned to the chart tag; platform values live on main"
 yq -e '.spec.template.spec.sources[] | select(.ref == "foundry") | has("path") | not' "$rendered" >/dev/null \
   || fail "foundry ref must be a value source, not a path"
+
+[ -n "$(yq -r '.spec.templatePatch // ""' "$rendered")" ] \
+  || fail "appset has no templatePatch to drop the web source"
+yq -r '.spec.templatePatch' "$rendered" | grep -q '/spec/sources/3' \
+  || fail "templatePatch does not remove the web source by index"
 
 for value_file in \
   '$app/deploy/api/values.yaml' \

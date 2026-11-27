@@ -71,7 +71,6 @@ spec:
               - name: caSecret.name
                 value: foundry-rds-ca
 
-        {{- if .web }}
         - repoURL: https://github.com/saxeum/foundry.git
           targetRevision: 'v{{ .chartVersion }}'
           path: charts/app-web
@@ -85,7 +84,6 @@ spec:
             parameters:
               - name: ingress.host
                 value: '{{ .host }}'
-        {{- end }}
 
       syncPolicy:
         automated:
@@ -108,3 +106,12 @@ spec:
             duration: 10s
             factor: 2
             maxDuration: 2m
+
+  # The web source is always in the template so this manifest is valid YAML
+  # before the controller templates it. An API-only app removes it by index:
+  # sources are app, foundry, api, web.
+  templatePatch: |
+    {{- if eq (toString .web) "false" }}
+    - op: remove
+      path: /spec/sources/3
+    {{- end }}
