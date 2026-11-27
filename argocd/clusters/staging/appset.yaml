@@ -46,10 +46,11 @@ spec:
           targetRevision: '{{ .revision }}'
           ref: app
 
-        # The platform repo at the chart release. The same ref supplies the
-        # profiles and environments value files.
+        # Platform configuration, not the chart release: profiles and
+        # environments are read from main. The chart sources below are the
+        # release tag, so a values change does not require a chart release.
         - repoURL: https://github.com/saxeum/foundry.git
-          targetRevision: 'v{{ .chartVersion }}'
+          targetRevision: main
           ref: foundry
 
         - repoURL: https://github.com/saxeum/foundry.git

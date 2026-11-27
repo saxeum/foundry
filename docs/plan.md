@@ -476,11 +476,15 @@ root Application (argocd/root)
   └── ApplicationSet + AppProjects (argocd/clusters/staging)
         └── <app>-<env> Application (multi-source)
               ├── app ref: app repo @ revision
-              ├── foundry ref: foundry @ v<chartVersion>
+              ├── foundry ref: foundry @ main (values); charts @ v<chartVersion>
               ├── api: charts/app-api, deploy/api/values*.yaml + profile + env
               ├── web: charts/app-web, deploy/web/values*.yaml + profile + env
               └── destination: namespace <app>-<env>
 ```
+
+The chart is the release tag; `profiles/` and `environments/` are platform
+configuration and are read from `main`, so a values change does not need a chart
+release.
 
 ### 9.2 AppProject per app
 
