@@ -116,6 +116,16 @@ for ref in app foundry; do
     || fail "appset has no $ref ref"
 done
 
+# The app ref follows the registry revision; the foundry ref is platform
+# configuration and must not be pinned to the chart tag, which predates the
+# profile and environment files.
+yq -e '.spec.template.spec.sources[] | select(.ref == "app") | .targetRevision == "main"' "$rendered" >/dev/null \
+  || fail "app ref is not the registry revision"
+yq -e '.spec.template.spec.sources[] | select(.ref == "foundry") | .targetRevision == "main"' "$rendered" >/dev/null \
+  || fail "foundry ref is pinned to the chart tag; platform values live on main"
+yq -e '.spec.template.spec.sources[] | select(.ref == "foundry") | has("path") | not' "$rendered" >/dev/null \
+  || fail "foundry ref must be a value source, not a path"
+
 for value_file in \
   '$app/deploy/api/values.yaml' \
   '$app/deploy/api/values-dev.yaml' \
