@@ -126,38 +126,39 @@ name: app1
 repo: https://github.com/saxeum/app1.git
 revision: main
 namespace: app1
-chart: app-api
-chartVersion: "0.1.0"          # platform release tag; the upgrade pin
 tier: internal                 # poc | internal | external
-environments: [dev, staging]
-imageRepository: 000000000000.dkr.ecr.ap-southeast-2.amazonaws.com/app1-api
+chartVersion: "0.1.0"          # platform release tag; the upgrade pin
+host: app1.foonix.net
+web: true                      # false omits the SPA source
 database: app1
 owners: [saxeum]
 ```
 
-### 4.2 App values: two keys only
+### 4.2 App values: three keys only
 
-`app1/deploy/values.yaml` and `app1/deploy/values-<env>.yaml` may contain only
-`platform`, `image` and `app`. Envelope keys are rejected — the chart schema
-validates the merged result and the env values are applied last, so a rogue key
-cannot win; the app CI also checks the key set.
+`app1/deploy/api/` and `app1/deploy/web/` each hold a `values.yaml` and a
+`values-<env>.yaml`, and they may contain only `platform`, `image` and `app`.
+Envelope keys are rejected — the chart schema validates the merged result and
+the env values are applied last, so a rogue key cannot win; the app CI also
+checks the key set. The repository and digest are per component.
 
 ```yaml
-# deploy/values.yaml
+# deploy/api/values.yaml
 platform:
   chartVersion: "0.1.0"        # must equal argocd/apps/app1.yaml
+image:
+  repository: 000000000000.dkr.ecr.ap-southeast-2.amazonaws.com/app1-api
 app:
-  metrics:
-    enabled: true
   env:
     FEATURE_EXAMPLE: "on"
-  secretRefs:
+  secrets:
     - name: app1-api
-      keys: [DATABASE_URL]
+      key: DATABASE_URL
+      env: DATABASE_URL
 ```
 
 ```yaml
-# deploy/values-dev.yaml — the only file CI writes
+# deploy/api/values-dev.yaml — one of the two files CI writes
 image:
   digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
 ```
@@ -172,8 +173,8 @@ highest:
 
 ```
 chart defaults
-  < app/deploy/values.yaml
-  < app/deploy/values-<env>.yaml
+  < app/deploy/<component>/values.yaml
+  < app/deploy/<component>/values-<env>.yaml
   < profiles/<tier>/values.yaml
   < environments/<env>/values.yaml        # platform always wins
 ```
@@ -234,9 +235,10 @@ foundry/
 │   └── app-web/
 ├── argocd/
 │   ├── root/application.yaml
-│   ├── apps/<app>.yaml          # the registry, one file per app
-│   ├── apps/appset.yaml         # matrix(apps, environments)
-│   └── projects/<app>.yaml      # AppProject per app
+│   ├── apps/<app>.yaml          # registry, read by the git generator
+│   └── clusters/staging/
+│       ├── appset.yaml          # matrix(apps, environments); api + web sources
+│       └── projects/<app>.yaml  # AppProject per app
 ├── environments/
 │   ├── dev/values.yaml
 │   └── staging/values.yaml
@@ -470,12 +472,13 @@ The image is identical in all three. That is the test.
 ### 9.1 Tree
 
 ```
-root Application
-  └── appset (ApplicationSet, matrix: argocd/apps/*.yaml × environments)
+root Application (argocd/root)
+  └── ApplicationSet + AppProjects (argocd/clusters/staging)
         └── <app>-<env> Application (multi-source)
-              ├── chart: foundry @ v<chartVersion>, path charts/app-api
-              ├── values: app repo deploy/values.yaml, values-<env>.yaml
-              ├── values: foundry profiles/<tier>, environments/<env>
+              ├── app ref: app repo @ revision
+              ├── foundry ref: foundry @ v<chartVersion>
+              ├── api: charts/app-api, deploy/api/values*.yaml + profile + env
+              ├── web: charts/app-web, deploy/web/values*.yaml + profile + env
               └── destination: namespace <app>-<env>
 ```
 
@@ -515,12 +518,12 @@ every platform PR. A mismatch is a failed build, not a surprise rollout.
 ```
 merge to app1/main
   → CI: test, e2e, conformance, build, push by SHA
-  → CI: open PR changing only deploy/values-dev.yaml
+  → CI: open PR changing only deploy/api/values-dev.yaml and deploy/web/values-dev.yaml
   → ruleset auto-merges that path when checks are green
   → Argo syncs app1-dev
 
 manual promote workflow
-  → PR changing only deploy/values-staging.yaml
+  → PR changing only deploy/api/values-staging.yaml and deploy/web/values-staging.yaml
   → human review and merge
   → Argo syncs app1-staging
 
@@ -530,8 +533,9 @@ prod (later)
 ```
 
 **The one automation exception.** A digest bump may be auto-merged, and only
-when: the PR touches exactly `deploy/values-dev.yaml`, every required check has
-passed, and the diff is a single `image.digest` line. No agent merges code; no
+when: the PR touches exactly `deploy/api/values-dev.yaml` and
+`deploy/web/values-dev.yaml`, every required check has passed, and each diff is a
+single `image.digest` line. No agent merges code; no
 automation writes to `main` in any other way. Humans merge staging and prod
 promotions.
 
@@ -752,8 +756,10 @@ value precedence and the PreSync ordering; do not assume either.
 make check-argocd
 ```
 
-Expect a rendered diff for `app1-dev` and `app1-staging`, and a PreSync hook
-before the Deployment in the sync result.
+`argocd ok` — static registry, project and ApplicationSet checks, plus dev and
+staging overlay renders: dev 1 replica/no PDB, staging 2/PDB, API migration Job
+present, web Job absent. The real `argocd app diff` and PreSync ordering are
+verified after #12, when the cluster exists.
 
 ### P4 — platform-go
 

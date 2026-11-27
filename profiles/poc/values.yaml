@@ -1,0 +1,11 @@
+tier: poc
+
+replicaCount: 1
+pdb:
+  enabled: false
+
+serviceMonitor:
+  enabled: false
+
+prometheusRule:
+  enabled: false

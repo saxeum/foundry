@@ -132,8 +132,8 @@ CRDs (P7); the environment values turn them on.
 
 ## 11. What the app repo supplies
 
-- `deploy/values.yaml` and `deploy/values-<env>.yaml`, containing only
-  `platform`, `image` and `app`.
+- `deploy/api/values.yaml` + `deploy/api/values-<env>.yaml`, and the same under
+  `deploy/web/`, containing only `platform`, `image` and `app`.
 - The Dockerfile, the OpenAPI spec and the generated client, the UI.
 - Tests: unit, integration against Postgres, and e2e through the LB.
 - The conformance render in CI, against the chart version it declares.

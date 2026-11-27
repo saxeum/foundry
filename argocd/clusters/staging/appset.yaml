@@ -1,0 +1,109 @@
+# One Application per app and environment. Both charts are sources of the same
+# Application so the API and the SPA share a namespace, a sync and a health
+# status; each has its own release name and its own app values.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: apps
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+
+  generators:
+    - matrix:
+        generators:
+          # One parameter map per registry file. Adding an app is a new file.
+          - git:
+              repoURL: https://github.com/saxeum/foundry.git
+              revision: main
+              files:
+                - path: argocd/apps/*.yaml
+          - list:
+              elements:
+                - env: dev
+                - env: staging
+
+  template:
+    metadata:
+      name: '{{ .name }}-{{ .env }}'
+      namespace: argocd
+      labels:
+        foundry.saxeum.dev/app: '{{ .name }}'
+        foundry.saxeum.dev/env: '{{ .env }}'
+    spec:
+      project: '{{ .name }}'
+
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{ .namespace }}-{{ .env }}'
+
+      sources:
+        # The app repo, read for its deploy values. A ref source is not applied.
+        - repoURL: '{{ .repo }}'
+          targetRevision: '{{ .revision }}'
+          ref: app
+
+        # The platform repo at the chart release. The same ref supplies the
+        # profiles and environments value files.
+        - repoURL: https://github.com/saxeum/foundry.git
+          targetRevision: 'v{{ .chartVersion }}'
+          ref: foundry
+
+        - repoURL: https://github.com/saxeum/foundry.git
+          targetRevision: 'v{{ .chartVersion }}'
+          path: charts/app-api
+          helm:
+            releaseName: '{{ .name }}-api'
+            valueFiles:
+              - '$app/deploy/api/values.yaml'
+              - '$app/deploy/api/values-{{ .env }}.yaml'
+              - '$foundry/profiles/{{ .tier }}/values.yaml'
+              - '$foundry/environments/{{ .env }}/values.yaml'
+            parameters:
+              - name: ingress.host
+                value: '{{ .host }}'
+              - name: migrations.ownerSecret.name
+                value: '{{ .name }}-owner'
+              - name: caSecret.name
+                value: foundry-rds-ca
+
+        {{- if .web }}
+        - repoURL: https://github.com/saxeum/foundry.git
+          targetRevision: 'v{{ .chartVersion }}'
+          path: charts/app-web
+          helm:
+            releaseName: '{{ .name }}-web'
+            valueFiles:
+              - '$app/deploy/web/values.yaml'
+              - '$app/deploy/web/values-{{ .env }}.yaml'
+              - '$foundry/profiles/{{ .tier }}/values.yaml'
+              - '$foundry/environments/{{ .env }}/values.yaml'
+            parameters:
+              - name: ingress.host
+                value: '{{ .host }}'
+        {{- end }}
+
+      syncPolicy:
+        automated:
+          selfHeal: true
+          # Prune stays off where a bad values key would delete the Ingress.
+          # The deliberate act is `make argocd-prune APP=...`, which says so.
+          prune: false
+        syncOptions:
+          - CreateNamespace=true
+        managedNamespaceMetadata:
+          labels:
+            # The namespace is the tenancy boundary and the Pod Security
+            # Admission boundary. The charts already satisfy restricted.
+            pod-security.kubernetes.io/enforce: restricted
+            pod-security.kubernetes.io/audit: restricted
+            pod-security.kubernetes.io/warn: restricted
+        retry:
+          limit: 5
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 2m

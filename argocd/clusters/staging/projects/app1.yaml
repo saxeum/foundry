@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: app1
+  namespace: argocd
+  annotations:
+    # The AppProject must exist before the ApplicationSet creates Applications
+    # that name it, or the first sync fails with "project does not exist" and
+    # waits for a retry.
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  description: app1 — its own namespaces, its own sources, nothing cluster-scoped
+  sourceRepos:
+    - https://github.com/saxeum/foundry.git
+    - https://github.com/saxeum/app1.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: "app1-*"
+  # No cluster-scoped resources. This is the tenancy boundary: an app cannot
+  # create a CRD, a ClusterRole or a namespace that is not its own.
+  clusterResourceWhitelist: []

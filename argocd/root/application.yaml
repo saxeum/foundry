@@ -1,0 +1,31 @@
+# The seed. Applied once by a human against the private API through the tunnel.
+# Everything below it — the AppProjects and the ApplicationSet — arrives through
+# sync, so adding an app after this is a merge, not another kubectl.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/saxeum/foundry.git
+    targetRevision: main
+    path: argocd/clusters/staging
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      # This Application syncs definitions — AppProjects and the ApplicationSet.
+      # A definition removed from git should stop existing.
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

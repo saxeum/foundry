@@ -434,7 +434,8 @@ The app repo is `app1`, created from `templates/app`. The onboarding procedure i
 2. Set `AWS_PUSH_ROLE_ARN` and `ECR_REGISTRY` on the app repo from the registry
    outputs.
 3. Run `scripts/onboard-app.sh app1` for each environment, over the tunnel.
-4. Add `argocd/apps/app1.yaml` and `argocd/projects/app1.yaml`; merge.
+4. Add `argocd/apps/app1.yaml` and
+   `argocd/clusters/staging/projects/app1.yaml`; merge.
 5. Push the first image. The dev digest PR opens; it auto-merges on the one path.
 6. Open the staging promotion PR; a human merges it.
 

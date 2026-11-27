@@ -41,6 +41,24 @@
     },
     "environment": { "type": "string" },
     "tier": { "enum": ["poc", "internal", "external"] },
+    "log": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "level": { "enum": ["debug", "info", "warn", "error"] },
+        "format": { "enum": ["json", "text"] }
+      }
+    },
+    "serviceMonitor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "enabled": { "type": "boolean" } }
+    },
+    "prometheusRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "enabled": { "type": "boolean" } }
+    },
     "replicaCount": { "type": "integer", "minimum": 0 },
     "service": {
       "type": "object",
