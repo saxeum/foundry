@@ -1,0 +1,9 @@
+# Copy to backend.hcl and fill in the account id. Do not commit it.
+#
+# Every stack except bootstrap uses this partial backend:
+#
+#   terraform init -backend-config=../backend.hcl
+#
+# and sets only its own key in versions.tf.
+bucket = "foundry-terraform-state-<account-id>"
+region = "ap-southeast-2"
