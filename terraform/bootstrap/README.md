@@ -13,9 +13,9 @@ It also owns the GitHub Actions OIDC provider, in one of two modes:
   second create fails with `EntityAlreadyExists`.
 
 Check which case you are in before applying; the command is in
-`docs/runbooks/bootstrap-platform.md`. On this account the provider still exists,
-so the first apply should set `-var manage_oidc_provider=false` unless it is
-deleted first.
+`docs/runbooks/bootstrap-platform.md`. On this account the provider was deleted
+with the godough teardown on 2026-11-28, so the default (`true`) is correct. Use
+`false` only when the preflight finds one.
 
 It does not create GuardDuty or CloudTrail. Those are in `terraform/account`, a
 separate stack so its state can be replaced without touching the bucket and the

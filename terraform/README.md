@@ -44,13 +44,14 @@ been applied once.
 
 ## Same account
 
-- The OIDC provider is the one shared object: `bootstrap` creates it on a fresh
-  account and reads it where one exists (`manage_oidc_provider`).
-- `account` owns GuardDuty and CloudTrail. If a partial teardown left a detector
-  or trail, import it or skip the stack with a recorded decision; never create a
-  second.
+- The OIDC provider is the only account-global object foundry may find already
+  present: `bootstrap` creates it on a fresh account and reads it where one
+  exists (`manage_oidc_provider`).
+- `account` owns GuardDuty and CloudTrail. If a brownfield account already has a
+  detector or trail, import it or skip the stack with a recorded decision; never
+  create a second.
 - Every resource is named `foundry-*`.
-- The VPC is `10.20.0.0/16`; do not peer to the `10.42.0.0/16` residue.
+- The VPC is `10.20.0.0/16`; do not peer to another platform's VPC.
 
 ## Not here
 

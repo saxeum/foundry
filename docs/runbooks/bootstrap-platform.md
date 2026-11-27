@@ -511,10 +511,11 @@ The same procedure, with three changes:
 | GuardDuty detector or CloudTrail exists | import in `terraform/account`, or skip that stack with a recorded decision; never create a second |
 | A `10.20.0.0/16` VPC exists | stop; pick another CIDR, do not adopt or peer it |
 
-At 2026-11-28 this account still has the OIDC provider, a `10.42.0.0/16` VPC,
-the two `godough-api`/`godough-web` ECR repositories, and the
-`godough-terraform-state-<account>` bucket with its KMS alias. None of them
-blocks foundry; the OIDC provider is the only one that changes a flag.
+At 2026-11-28 the godough teardown completed: the OIDC provider, the
+`10.42.0.0/16` VPC, the ECR repositories and the S3 buckets are gone. Two
+godough KMS keys remain in `PendingDeletion` until 2026-12-28 and cannot be
+used. The preflight in step 1 is still the authority on the day you run it: a
+teardown can be mid-flight, and the account belongs to more than one project.
 
 ---
 

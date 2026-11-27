@@ -290,35 +290,28 @@ CA bundle, the database bootstrap, the owner credential.
 
 ## 7. Terraform
 
-### 7.0 Same account, no dependency on the old platform
+### 7.0 Same account, now empty of godough
 
-foundry runs in the **existing** AWS account. The account is not empty: the
-godough teardown is incomplete, and at 2026-11-28 the API still reports five
-godough-named resources. The rule is that foundry depends on **neither their
-presence nor their absence**; it creates what it needs.
+foundry runs in the **existing** AWS account. The godough teardown completed on
+2026-11-28: a re-query found no godough EKS, RDS or ECR in any region,
+no VPC `10.42.0.0/16`, no ECR repositories, no S3 buckets and no GitHub OIDC
+provider. What remains is:
 
-| Resource | Present | Foundry response |
+| Remnant | State | Foundry response |
 |---|---|---|
-| GitHub OIDC provider | yes | `manage_oidc_provider = false` for the first apply, or delete it and use the default |
-| VPC `10.42.0.0/16` (`godough-staging`) | yes | left alone; foundry uses `10.20.0.0/16` |
-| ECR `godough-api`, `godough-web` | yes | left alone; foundry uses `app1-*` |
-| `godough-terraform-state-<account>`, `alias/godough-terraform-state` | yes | left alone; foundry has its own bucket and key |
-| EKS, RDS, ALB, GuardDuty, CloudTrail, SNS | no | foundry creates its own |
-| Budgets `My Zero-Spend Budget`, `triage-dev-monthly` | yes (not godough's) | left alone; foundry adds `foundry-monthly` |
+| Two KMS keys tagged `Project=godough` | `PendingDeletion` until 2026-12-28 | left to expire; they cannot be used |
+| NAT `godough-nat` | `deleted` | a tombstone; no action |
+| Default VPC `172.31.0.0/16` | present | left alone |
+| Other projects (`zuchat` ECS, `yambo` secrets, `eks-dev` RDS groups) | present, tagged `ManagedBy=terraform` | not foundry's; not touched |
 
 Rules:
 
-- **The OIDC provider is the one collision.** AWS allows one per URL per
-  account. `terraform/bootstrap` has `manage_oidc_provider`: true creates,
-  false reads. A fresh account uses true; this account uses false until the
-  survivor is deleted.
-- **Foundry owns its detection.** `terraform/account` creates GuardDuty and a
-  multi-region CloudTrail, because the account no longer has them. If a detector
-  or trail exists when it is applied, import it or skip the stack with a
-  recorded decision; do not create a second.
-- **Residue is left alone.** Foundry does not delete, adopt or peer to
-  `godough-*` resources. The VPCs do not overlap and the names do not collide.
-- **Every foundry resource is `foundry-*`.**
+- **Foundry creates its own account-global controls.** The GitHub OIDC provider
+  (`manage_oidc_provider = true`, the default), GuardDuty and CloudTrail. The
+  switch stays because a brownfield account can already have the provider.
+- **No foundry resource is named `godough-*`**, and no foundry stack deletes or
+  adopts another project's resources.
+- **The VPC is foundry's own**, `10.20.0.0/16`; the default VPC is untouched.
 - **The blast radius is the account.** One administrator role reaches
   everything. Acceptable for dev and staging; prod gets its own account.
 
@@ -326,8 +319,8 @@ The incremental cost is roughly **$180/month**: EKS control plane ~$73, NAT
 ~$37, ALB ~$16, two small RDS instances ~$30, nodes ~$30. The `foundry-monthly`
 budget is the ceiling.
 
-Trigger to revisit: the last godough-named resource is deleted (then this
-section is only history), or prod exists (then the account boundary is real).
+Trigger to revisit: prod exists, or a brownfield account is used — then the
+preflight and `manage_oidc_provider` decide, not this section.
 
 ### 7.1 Stacks and state
 
@@ -715,10 +708,9 @@ aws ec2 describe-vpcs --query 'Vpcs[].CidrBlock' --output text
 aws eks list-clusters --query 'clusters' --output text
 ```
 
-Expect the provider (or none, on a fresh account), no trail and no detector
-unless a partial teardown left one, no `10.20.0.0/16`, and no `foundry-*`
-cluster. A missing provider is fine; a second one is not. A second trail or
-detector is a stop, not a retry.
+Expect no provider, no trail and no detector unless a brownfield account left
+one, no `10.20.0.0/16`, and no `foundry-*` cluster. A provider or detector that
+does exist is brownfield: use `manage_oidc_provider=false`, import, or stop.
 
 ```
 terraform -chdir=terraform/network init -backend=false
@@ -836,7 +828,7 @@ can fail.
 | DR-010 | dev+staging one account/cluster; prod deferred | No mechanism without a user | three accounts today (cost, no customer) |
 | DR-011 | Chart consumed from the git tag (public repo) | No chart registry, no token refresh | OCI in ECR + CronJob (more moving parts) |
 | DR-012 | WAF count in dev/staging, block in external | Read the logs before blocking | block everywhere (launch risk) |
-| DR-013 | Same AWS account; foundry creates its own detection; OIDC provider is `manage_oidc_provider` (true creates, false reads) | No new account yet; the old account-global controls are gone | a second provider or trail (fails), a new account (cost, no customer) |
+| DR-013 | Same AWS account, now empty of godough; foundry creates its own OIDC provider, GuardDuty and CloudTrail; `manage_oidc_provider` remains for brownfield | No new account; the old controls are gone | a new account (cost, no customer), a second provider (fails) |
 | DR-014 | Foundry VPC `10.20.0.0/16`, no peering | No overlap with the `10.42.0.0/16` residue | shared VPC (couples the platforms) |
 | DR-015 | `account` owns GuardDuty/CloudTrail; `alerts` owns SNS/budget | Detection is no longer inherited; split by lifecycle | one stack (a trail change risks the bucket and key) |
 
@@ -855,10 +847,9 @@ can fail.
 | Public foundry repo discloses topology | no secrets, no state, scrub account IDs from examples | a customer objects |
 | Owner DSN is still long-lived | scoped per app, rotated, recorded | ESO CSI short-lived credentials |
 | Migration Job and Argo hook ordering | PreSync verification in P3 | a schema/code mismatch in staging |
-| Shared account with godough residue | prefixed names, separate VPC and cluster; prod in its own account | prod provisioning |
-| OIDC provider already exists | `manage_oidc_provider=false`; the runbook preflight says which mode | first apply |
-| A partial teardown leaves a detector or trail | `account` imports it or is skipped with a recorded decision | P1 preflight |
-| Godough residue is deleted mid-flight | foundry never references it; only the OIDC mode changes | last godough resource |
+| Shared account with other projects | prefixed names, separate VPC and cluster; prod in its own account | prod provisioning |
+| Brownfield account already has the OIDC provider, detector or trail | `manage_oidc_provider=false`; import in `account`; preflight says which | first apply in that account |
+| Another project's resources are mistaken for foundry's | `foundry-*` names, separate stacks, no cross-stack deletes | any shared account |
 
 ---
 
@@ -869,7 +860,7 @@ Resolved 2026-11-28. OQ-5 is a standing trigger, not a question.
 | # | Question | Answer |
 |---|---|---|
 | OQ-1 | Is `foundry` public? | **public.** Chart consumed from the git tag; account IDs scrubbed; no secrets or state in the repo. |
-| OQ-2 | New AWS account, or the existing one? | **existing account**, which still has godough residue. Foundry is independent of it; the OIDC provider is the one shared object. See 7.0. |
+| OQ-2 | New AWS account, or the existing one? | **existing account**, empty of godough resources as of 2026-11-28. Foundry creates its own OIDC provider and detection; see 7.0. |
 | OQ-3 | Zone | **`<app>.foonix.net`**, one wildcard certificate. |
 | OQ-4 | Alert destination | **SNS → email** first; Slack when there is an on-call. |
 | OQ-6 | Chart delivery if private | moot — the repo is public. OCI in ECR if that changes. |
