@@ -1,0 +1,33 @@
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+*.tfvars
+!*.tfvars.example
+backend.hcl
+crash.log
+
+# Kubernetes / Helm
+*.tgz
+.kubeconfig*
+.kube/
+
+# Built artefacts
+bin/
+dist/
+
+# Secrets and downloaded bundles
+.env
+*.pem
+*.key
+*.p12
+
+# Local tool state
+.docker-ecr/
+node_modules/
+
+# Editor and OS
+.zed/
+.DS_Store
