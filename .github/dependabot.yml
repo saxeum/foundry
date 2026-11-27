@@ -1,0 +1,95 @@
+version: 2
+
+# Routine version updates. Security advisories already produce alerts; this
+# opens the PRs nobody is told about. Nothing auto-merges: every PR runs
+# platform-ci and a human merges it.
+updates:
+  - package-ecosystem: terraform
+    directory: /terraform/bootstrap
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      terraform:
+        patterns: ["*"]
+
+  - package-ecosystem: terraform
+    directory: /terraform/account
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      terraform:
+        patterns: ["*"]
+
+  - package-ecosystem: terraform
+    directory: /terraform/alerts
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      terraform:
+        patterns: ["*"]
+
+  - package-ecosystem: terraform
+    directory: /terraform/network
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      terraform:
+        patterns: ["*"]
+
+  - package-ecosystem: terraform
+    directory: /terraform/registry
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      terraform:
+        patterns: ["*"]
+
+  - package-ecosystem: terraform
+    directory: /terraform/data
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      terraform:
+        patterns: ["*"]
+
+  - package-ecosystem: terraform
+    directory: /terraform/cluster
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      terraform:
+        patterns: ["*"]
+
+  - package-ecosystem: terraform
+    directory: /terraform/edge
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      terraform:
+        patterns: ["*"]
+
+  - package-ecosystem: terraform
+    directory: /terraform/argocd
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      terraform:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns: ["*"]
