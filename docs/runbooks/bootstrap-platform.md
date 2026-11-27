@@ -332,11 +332,11 @@ The ALB does not exist until an Ingress is synced, so the first apply uses an
 empty `alb_hostname` and the DNS record is created after step 14.
 
 ```
-terraform -chdir=terraform/edge plan -var domain=app1.foonix.net -var cloudflare_zone=foonix.net
+terraform -chdir=terraform/edge plan -var zone=foonix.net -var app_hostname=app1.foonix.net
 ```
 
 ```
-terraform -chdir=terraform/edge apply -var domain=app1.foonix.net -var cloudflare_zone=foonix.net
+terraform -chdir=terraform/edge apply -var zone=foonix.net -var app_hostname=app1.foonix.net
 ```
 
 Expected: certificate `ISSUED` after the Cloudflare validation record, the LBC
@@ -420,7 +420,7 @@ Set it on the edge stack and apply again, so the Cloudflare record points at the
 ALB rather than at nothing:
 
 ```
-terraform -chdir=terraform/edge apply -var domain=app1.foonix.net -var cloudflare_zone=foonix.net -var alb_hostname=<alb-hostname>
+terraform -chdir=terraform/edge apply -var zone=foonix.net -var app_hostname=app1.foonix.net -var alb_hostname=<alb-hostname>
 ```
 
 ---
