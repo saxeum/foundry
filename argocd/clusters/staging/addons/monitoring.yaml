@@ -1,0 +1,51 @@
+# kube-prometheus-stack is an Argo Application, not a Terraform Helm release and
+# not a manual helm install: Terraform owns the cluster, Argo owns what runs on
+# it. The chart is a release; the values are platform configuration from main.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+  annotations:
+    # Root waits for this Application to be Healthy before creating the app
+    # ApplicationSet at wave 0, so app ServiceMonitor/PrometheusRule CRDs exist
+    # before the first app sync.
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  project: platform
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: "94.2.0"
+      helm:
+        releaseName: monitoring
+        # The operator's CRDs ship in the chart's crds/ directory. Argo must
+        # render them, or the CRs it also applies have no definitions.
+        includeCrds: true
+        valueFiles:
+          - $values/argocd/addons/monitoring/values-staging.yaml
+    - repoURL: https://github.com/saxeum/foundry.git
+      targetRevision: main
+      ref: values
+
+  syncPolicy:
+    automated:
+      selfHeal: true
+      # The stack owns PVs. Pruning a removed resource is a deliberate act, not
+      # something a values edit should do.
+      prune: false
+    syncOptions:
+      - CreateNamespace=true
+      # The operator CRDs are too large for the client-side apply annotation.
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

@@ -59,6 +59,56 @@ root=argocd/root/application.yaml
 [ "$(yq -r '.spec.source.directory.recurse' "$root")" = "true" ] || fail "root recurse"
 [ "$(yq -r '.spec.destination.namespace' "$root")" = "argocd" ] || fail "root destination"
 
+# The platform addon project is the only one with cluster-scoped powers, and it
+# is applied before the monitoring Application.
+platform=argocd/clusters/staging/projects/platform.yaml
+[ -f "$platform" ] || fail "missing $platform"
+[ "$(yq -r '.metadata.annotations["argocd.argoproj.io/sync-wave"]' "$platform")" = "-3" ] \
+  || fail "platform AppProject is not wave -3"
+yq -e '.spec.sourceRepos[] | select(. == "https://prometheus-community.github.io/helm-charts")' "$platform" >/dev/null \
+  || fail "platform AppProject does not allow the monitoring chart repo"
+yq -e '.spec.sourceRepos[] | select(. == "https://github.com/saxeum/foundry.git")' "$platform" >/dev/null \
+  || fail "platform AppProject does not allow the foundry values repo"
+yq -e '.spec.destinations[0].namespace == "monitoring"' "$platform" >/dev/null \
+  || fail "platform AppProject does not scope monitoring"
+yq -e '.spec.clusterResourceWhitelist[] | select(.kind == "CustomResourceDefinition")' "$platform" >/dev/null \
+  || fail "platform AppProject does not allow CRDs"
+yq -e '.spec.clusterResourceWhitelist[] | select(.kind == "ClusterRole")' "$platform" >/dev/null \
+  || fail "platform AppProject does not allow ClusterRoles"
+
+# Monitoring is an Application, not a Terraform helm_release: chart from the
+# upstream repo, values from main, wave -2 so the app ApplicationSet waits for
+# its CRDs.
+monitoring=argocd/clusters/staging/addons/monitoring.yaml
+[ -f "$monitoring" ] || fail "missing $monitoring"
+[ "$(yq -r '.metadata.annotations["argocd.argoproj.io/sync-wave"]' "$monitoring")" = "-2" ] \
+  || fail "monitoring Application is not wave -2"
+[ "$(yq -r '.spec.project' "$monitoring")" = "platform" ] || fail "monitoring is not in the platform project"
+[ "$(yq -r '.spec.destination.namespace' "$monitoring")" = "monitoring" ] \
+  || fail "monitoring destination is not the monitoring namespace"
+yq -e '.spec.sources[] | select(.chart == "kube-prometheus-stack") | .targetRevision == "94.2.0"' "$monitoring" >/dev/null \
+  || fail "monitoring chart is not pinned"
+yq -e '.spec.sources[] | select(.chart == "kube-prometheus-stack") | .helm.includeCrds == true' "$monitoring" >/dev/null \
+  || fail "monitoring does not render the operator CRDs"
+yq -e '.spec.sources[] | select(.chart == "kube-prometheus-stack") | .helm.valueFiles[] | select(. == "$values/argocd/addons/monitoring/values-staging.yaml")' "$monitoring" >/dev/null \
+  || fail "monitoring Application does not read its values file"
+yq -e '.spec.sources[] | select(.ref == "values") | .targetRevision == "main"' "$monitoring" >/dev/null \
+  || fail "monitoring values ref is not main"
+yq -e '.spec.sources[] | select(.ref == "values") | has("path") | not' "$monitoring" >/dev/null \
+  || fail "monitoring values ref must not have a path"
+yq -e '.spec.syncPolicy.syncOptions[] | select(. == "CreateNamespace=true")' "$monitoring" >/dev/null \
+  || fail "monitoring does not create its namespace"
+yq -e '.spec.syncPolicy.syncOptions[] | select(. == "ServerSideApply=true")' "$monitoring" >/dev/null \
+  || fail "monitoring does not use server-side apply for the CRDs"
+[ "$(yq -r '.spec.syncPolicy.automated.prune' "$monitoring")" = "false" ] \
+  || fail "monitoring prunes stateful resources"
+[ -f argocd/addons/monitoring/values-staging.yaml ] \
+  || fail "missing monitoring values"
+[ "$(yq -r '.prometheus.prometheusSpec.retention' argocd/addons/monitoring/values-staging.yaml)" = "15d" ] \
+  || fail "prometheus retention is not set"
+[ "$(yq -r '.grafana.enabled' argocd/addons/monitoring/values-staging.yaml)" = "false" ] \
+  || fail "grafana is enabled without an auth story"
+
 # One registry file and one AppProject per app, and they agree.
 for registry in argocd/apps/*.yaml; do
   name=$(yq -r '.name' "$registry")

@@ -1,0 +1,70 @@
+# kube-prometheus-stack, staging. The chart is the release tag in the
+# Application; this file is platform configuration and is read from main.
+
+prometheus:
+  prometheusSpec:
+    replicas: 1
+    retention: 15d
+    walCompression: true
+    enableAdminAPI: false
+    # Discover every app ServiceMonitor/Rule, not only those labelled for this
+    # release. The AppProject is the tenancy boundary; the selector is not.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorNamespaceSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    podMonitorNamespaceSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    probeNamespaceSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    ruleNamespaceSelectorNilUsesHelmValues: false
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        memory: 1Gi
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          resources:
+            requests:
+              storage: 20Gi
+
+alertmanager:
+  alertmanagerSpec:
+    replicas: 1
+    retention: 120h
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        memory: 128Mi
+    storage:
+      volumeClaimTemplate:
+        spec:
+          resources:
+            requests:
+              storage: 5Gi
+  # No receiver yet. SNS wiring (IRSA role for this service account plus the
+  # topic ARN) is P7b; until then alerts are visible in the Alertmanager UI and
+  # go nowhere else.
+
+grafana:
+  # No ingress and no auth story. The chart's default admin password on a
+  # port-forward is not a login; P8 brings SSO or an operator-managed secret.
+  enabled: false
+
+prometheusOperator:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+kubeStateMetrics:
+  enabled: true
+
+nodeExporter:
+  enabled: true
