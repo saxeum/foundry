@@ -12,7 +12,7 @@ CHARTS := charts/app-api charts/app-web
 STACK ?=
 TF_ARGS ?=
 
-.PHONY: help fmt fmt-check validate init plan apply charts-lint charts-test check-argocd platform-go-lint platform-go-test eks-tunnel eks-kubeconfig
+.PHONY: help fmt fmt-check validate init plan apply charts-lint charts-test check-argocd platform-go-lint platform-go-test template-test new-app eks-tunnel eks-kubeconfig
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z0-9_.-]+:.*## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*## "}; {printf "  %-20s %s\n", $$1, $$2}'
@@ -60,6 +60,15 @@ platform-go-lint: ## Format-check and vet the foundry/go module
 
 platform-go-test: ## Unit tests for the foundry/go module, with the race detector
 	cd go && go test -race -short ./...
+
+template-test: ## Test the template in place: unit, generated code, chart conformance
+	cd templates/app && go test ./...
+	cd templates/app && make codegen-check
+	cd templates/app && make conformance APP=demo
+
+new-app: ## Instantiate the template: make new-app NAME=demo
+	@test -n "$(NAME)" || { echo "usage: make new-app NAME=<name>"; exit 1; }
+	./scripts/new-app.sh $(NAME)
 
 # The EKS API is private. This is the only way to reach it from a laptop; leave
 # it running in its own terminal.

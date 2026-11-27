@@ -1,0 +1,12 @@
+# The same generator settings as the platform: strict-server is the point. The
+# handler implements an interface whose methods take typed request objects and
+# return typed response objects, so a documented status code that no branch
+# produces is a compile error.
+package: api
+output: internal/api/openapi.gen.go
+generate:
+  models: true
+  std-http-server: true
+  strict-server: true
+output-options:
+  skip-prune: false

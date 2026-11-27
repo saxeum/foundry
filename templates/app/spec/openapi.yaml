@@ -1,0 +1,43 @@
+openapi: 3.0.3
+info:
+  title: __APP_NAME__ API
+  version: "1"
+  description: |
+    One endpoint, generated into both the handler interface and the client.
+    Replace this with the app's contract; the shape of the generation is the
+    part the platform owns.
+paths:
+  /api/hello:
+    get:
+      operationId: hello
+      summary: A greeting.
+      responses:
+        "200":
+          description: A greeting.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Greeting"
+        "500":
+          $ref: "#/components/responses/InternalError"
+components:
+  responses:
+    InternalError:
+      description: The server failed. The body never names the cause.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    Greeting:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string

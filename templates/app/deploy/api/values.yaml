@@ -1,0 +1,17 @@
+# App-owned values only: `platform`, `image`, `app`. The chart schema rejects
+# anything else, and the environment/profile values win over these.
+platform:
+  chartVersion: "0.1.0"
+
+app:
+  name: __APP_NAME__
+  env: {}
+  secrets:
+    - name: __APP_NAME__-api
+      key: DATABASE_URL
+      env: DATABASE_URL
+
+image:
+  # The onboarding step replaces this with the app's ECR repository.
+  repository: example.com/__APP_NAME__-api
+  digest: ""
