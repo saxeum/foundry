@@ -12,7 +12,7 @@ CHARTS := charts/app-api charts/app-web
 STACK ?=
 TF_ARGS ?=
 
-.PHONY: help fmt fmt-check validate init plan apply charts-lint charts-test check-argocd eks-tunnel eks-kubeconfig
+.PHONY: help fmt fmt-check validate init plan apply charts-lint charts-test check-argocd platform-go-lint platform-go-test eks-tunnel eks-kubeconfig
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z0-9_.-]+:.*## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*## "}; {printf "  %-20s %s\n", $$1, $$2}'
@@ -53,6 +53,13 @@ charts-test: ## Render every chart and assert the contract
 
 check-argocd: ## Validate the registry, AppProjects and ApplicationSet
 	./scripts/check-argocd.sh
+
+platform-go-lint: ## Format-check and vet the foundry/go module
+	@out=$$(gofmt -l $$(find go -name '*.go' -type f)); if [ -n "$$out" ]; then echo "gofmt found unformatted files:"; echo "$$out"; exit 1; fi
+	cd go && go vet ./...
+
+platform-go-test: ## Unit tests for the foundry/go module, with the race detector
+	cd go && go test -race -short ./...
 
 # The EKS API is private. This is the only way to reach it from a laptop; leave
 # it running in its own terminal.
