@@ -12,6 +12,11 @@ CHARTS := charts/app-api charts/app-web
 STACK ?=
 TF_ARGS ?=
 
+# Host targets read .env when it exists. Containers do not use this file; the
+# chart injects PORT and the Secret injects DATABASE_URL. set -a is what makes
+# TF_VAR_* and CLOUDFLARE_API_TOKEN visible to Terraform.
+LOAD_ENV := set -a; if [ -f .env ]; then . ./.env; fi; set +a
+
 .PHONY: help fmt fmt-check validate init plan apply charts-lint charts-test check-argocd platform-go-lint platform-go-test template-test new-app eks-tunnel eks-kubeconfig
 
 help: ## Show this help
@@ -34,16 +39,16 @@ validate: ## Initialise without a backend and validate every stack
 
 # Bootstrap keeps local state; every other stack reads the bucket it created.
 init: ## Initialise every stack against the S3 backend (bootstrap stays local)
-	terraform -chdir=terraform/bootstrap init
-	@for s in $(BACKEND_STACKS); do terraform -chdir=terraform/$$s init -backend-config=../backend.hcl || exit 1; done
+	$(LOAD_ENV); terraform -chdir=terraform/bootstrap init
+	@$(LOAD_ENV); for s in $(BACKEND_STACKS); do terraform -chdir=terraform/$$s init -backend-config=../backend.hcl || exit 1; done
 
 plan: ## Plan one stack: make plan STACK=network [TF_ARGS=...]
 	@test -n "$(STACK)" || { echo "usage: make plan STACK=<stack> [TF_ARGS=...]"; exit 1; }
-	terraform -chdir=terraform/$(STACK) plan $(TF_ARGS)
+	$(LOAD_ENV); terraform -chdir=terraform/$(STACK) plan $(TF_ARGS)
 
 apply: ## Apply one stack: make apply STACK=network [TF_ARGS=...]
 	@test -n "$(STACK)" || { echo "usage: make apply STACK=<stack> [TF_ARGS=...]"; exit 1; }
-	terraform -chdir=terraform/$(STACK) apply $(TF_ARGS)
+	$(LOAD_ENV); terraform -chdir=terraform/$(STACK) apply $(TF_ARGS)
 
 charts-lint: ## Lint every chart with the contract values
 	@for c in $(CHARTS); do helm lint $$c --kube-version 1.37.0 -f $$c/tests/ci-values.yaml || exit 1; done
@@ -74,15 +79,15 @@ new-app: ## Instantiate the template: make new-app NAME=demo
 # it running in its own terminal.
 eks-tunnel: ## [host] Forward the private EKS API to localhost:6443 through SSM
 	@command -v session-manager-plugin >/dev/null || { echo "session-manager-plugin is not installed"; exit 1; }
-	@target=$$(terraform -chdir=terraform/cluster output -raw bastion_instance_id); \
+	@$(LOAD_ENV); target=$$(terraform -chdir=terraform/cluster output -raw bastion_instance_id); \
 	 host=$$(terraform -chdir=terraform/cluster output -raw cluster_endpoint | sed 's|https://||'); \
 	 echo "forwarding $$host:443 to 127.0.0.1:6443 through $$target; leave this running, ^C to stop"; \
 	 aws ssm start-session --region $(AWS_REGION) --target "$$target" --document-name AWS-StartPortForwardingSessionToRemoteHost --parameters host="$$host",portNumber="443",localPortNumber="6443"
 
 eks-kubeconfig: ## [host] Point kubectl at the tunnel as context foundry-staging
-	@aws eks update-kubeconfig --region $(AWS_REGION) --kubeconfig $(KUBECONFIG) \
+	@$(LOAD_ENV); aws eks update-kubeconfig --region $(AWS_REGION) --kubeconfig $(KUBECONFIG) \
 	  --name "$$(terraform -chdir=terraform/cluster output -raw cluster_name)" --alias $(KUBE_CONTEXT) >/dev/null || exit 1
-	@cluster=$$(kubectl config view --kubeconfig $(KUBECONFIG) -o jsonpath="{.contexts[?(@.name=='$(KUBE_CONTEXT)')].context.cluster}"); \
+	@$(LOAD_ENV); cluster=$$(kubectl config view --kubeconfig $(KUBECONFIG) -o jsonpath="{.contexts[?(@.name=='$(KUBE_CONTEXT)')].context.cluster}"); \
 	 host=$$(terraform -chdir=terraform/cluster output -raw cluster_endpoint | sed 's|https://||'); \
 	 kubectl config set-cluster "$$cluster" --kubeconfig $(KUBECONFIG) --server=https://127.0.0.1:6443 --tls-server-name="$$host" >/dev/null || exit 1; \
 	 kubectl config use-context $(KUBE_CONTEXT) --kubeconfig $(KUBECONFIG) >/dev/null || exit 1; \

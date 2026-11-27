@@ -42,6 +42,23 @@ gate.
 | `app1` | reference snippet app, instantiated from `templates/app` | not created yet |
 | `godough` | legacy implementation, source material | frozen |
 
+## Configuration
+
+Host targets (`make plan`, `init`, `apply`, `eks-tunnel`, `eks-kubeconfig`)
+source `.env` when it exists. Copy the platform example and fill it:
+
+```
+cp .env.example .env
+```
+
+Only platform values belong there: `CLOUDFLARE_API_TOKEN`,
+`TF_VAR_alert_email`, and optionally `AWS_PROFILE`. An app's `DATABASE_URL`,
+`GOOGLE_*` and `SNIPPET_ADDR` belong in that app repo's `.env`; Terraform
+ignores them.
+
+`.env` is gitignored; it should be mode 600. Charts, tests, `validate` and
+`check-argocd` do not need it.
+
 ## Rules
 
 - One app per repo. One platform. No shared working tree.
