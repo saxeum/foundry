@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["app", "image"],
+  "properties": {
+    "app": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "env": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "secrets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "key", "env"],
+            "properties": {
+              "name": { "type": "string" },
+              "key": { "type": "string" },
+              "env": { "type": "string" }
+            }
+          }
+        },
+        "serviceAccount": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "create": { "type": "boolean" },
+            "name": { "type": "string" },
+            "annotations": { "type": "object" },
+            "automount": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "digest"],
+      "properties": {
+        "repository": { "type": "string" },
+        "digest": { "type": "string" },
+        "pullPolicy": { "enum": ["Always", "IfNotPresent", "Never"] }
+      }
+    },
+    "platform": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "chartVersion": { "type": "string" }
+      }
+    },
+    "environment": { "type": "string" },
+    "tier": { "enum": ["poc", "internal", "external"] },
+    "log": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "level": { "enum": ["debug", "info", "warn", "error"] },
+        "format": { "enum": ["json", "text"] }
+      }
+    },
+    "replicaCount": { "type": "integer", "minimum": 0 },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+      }
+    },
+    "probes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "livenessPath": { "type": "string" },
+        "readinessPath": { "type": "string" },
+        "initialDelaySeconds": { "type": "integer" },
+        "periodSeconds": { "type": "integer" },
+        "failureThreshold": { "type": "integer" }
+      }
+    },
+    "resources": { "type": "object" },
+    "podSecurityContext": { "type": "object" },
+    "securityContext": { "type": "object" },
+    "terminationGracePeriodSeconds": { "type": "integer" },
+    "topologySpread": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "topologyKey": { "type": "string" },
+        "whenUnsatisfiable": { "enum": ["DoNotSchedule", "ScheduleAnyway"] }
+      }
+    },
+    "pdb": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "minAvailable": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "vpcCidr": { "type": "string" },
+        "databasePort": { "type": "integer" },
+        "ingressFromVpc": { "type": "boolean" },
+        "monitoringNamespace": { "type": "string" }
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "host": { "type": "string" },
+        "path": { "type": "string" },
+        "pathType": { "enum": ["Prefix", "Exact", "ImplementationSpecific"] },
+        "groupName": { "type": "string" },
+        "groupOrder": { "type": "integer" },
+        "certificateArn": { "type": "string" },
+        "wafAclArn": { "type": "string" },
+        "sslPolicy": { "type": "string" },
+        "healthcheckPath": { "type": "string" },
+        "accessLogs": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "bucket": { "type": "string" },
+            "prefix": { "type": "string" }
+          }
+        },
+        "annotations": { "type": "object" }
+      }
+    },
+    "migrations": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "ownerSecret": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "name": { "type": "string" },
+            "key": { "type": "string" }
+          }
+        },
+        "activeDeadlineSeconds": { "type": "integer" },
+        "backoffLimit": { "type": "integer" }
+      }
+    },
+    "caSecret": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "key": { "type": "string" },
+        "mountPath": { "type": "string" }
+      }
+    },
+    "externalSecrets": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "serviceMonitor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "interval": { "type": "string" },
+        "path": { "type": "string" }
+      }
+    },
+    "prometheusRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "errorRateThreshold": { "type": "number" },
+        "p99Seconds": { "type": "number" },
+        "restartsThreshold": { "type": "number" }
+      }
+    },
+    "nodeSelector": { "type": "object" },
+    "tolerations": { "type": "array" }
+  }
+}

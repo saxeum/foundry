@@ -1,0 +1,71 @@
+{{- if .Values.migrations.enabled }}
+{{- $owner := required "migrations.ownerSecret.name is required when migrations.enabled" .Values.migrations.ownerSecret.name }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "app-api.fullname" . }}-migrate
+  labels:
+    {{- include "app-api.labels" . | nindent 4 }}
+  annotations:
+    # Before the Deployment on every install and upgrade. A failed migration
+    # fails the sync, and the Deployment is never updated against a schema the
+    # code does not expect.
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    # A Job is immutable and Helm does not collect hooks. Without this the second
+    # upgrade fails on the pod template, which is the least obvious way to find
+    # out a hook was never cleaned up.
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  # No retries: a migration that failed half way is a decision to make, not a
+  # loop to enter. The runner's advisory lock is what makes a re-run safe.
+  backoffLimit: {{ .Values.migrations.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.migrations.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- include "app-api.selectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: migrate
+          image: {{ include "app-api.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/app-migrate"]
+          env:
+            - name: APP_NAME
+              value: {{ include "app-api.name" . | quote }}
+            - name: APP_ENV
+              value: {{ .Values.environment | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.log.level | quote }}
+            - name: LOG_FORMAT
+              value: {{ .Values.log.format | quote }}
+            - name: DATABASE_URL_OWNER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $owner }}
+                  key: {{ .Values.migrations.ownerSecret.key }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- if .Values.caSecret.name }}
+          volumeMounts:
+            - name: ca
+              mountPath: {{ .Values.caSecret.mountPath }}
+              readOnly: true
+          {{- end }}
+      {{- if .Values.caSecret.name }}
+      volumes:
+        - name: ca
+          secret:
+            secretName: {{ .Values.caSecret.name }}
+            items:
+              - key: {{ .Values.caSecret.key }}
+                path: {{ .Values.caSecret.key }}
+      {{- end }}
+{{- end }}

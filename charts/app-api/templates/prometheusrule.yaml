@@ -1,0 +1,62 @@
+{{- if .Values.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "app-api.fullname" . }}
+  labels:
+    {{- include "app-api.labels" . | nindent 4 }}
+spec:
+  groups:
+    - name: {{ include "app-api.fullname" . }}
+      rules:
+        - alert: AppHighErrorRate
+          expr: |
+            sum(rate(http_requests_total{app_kubernetes_io_name="{{ include "app-api.fullname" . }}",status=~"5.."}[5m]))
+            /
+            clamp_min(sum(rate(http_requests_total{app_kubernetes_io_name="{{ include "app-api.fullname" . }}"}[5m])), 1)
+            > {{ .Values.prometheusRule.errorRateThreshold }}
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ include "app-api.fullname" . }} is returning 5xx above threshold"
+            description: "5xx ratio over the last 10 minutes is above the configured threshold."
+
+        - alert: AppHighLatency
+          expr: |
+            histogram_quantile(0.99,
+              sum(rate(http_request_duration_seconds_bucket{app_kubernetes_io_name="{{ include "app-api.fullname" . }}"}[5m])) by (le)
+            ) > {{ .Values.prometheusRule.p99Seconds }}
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ include "app-api.fullname" . }} p99 latency is above threshold"
+            description: "p99 over the last 10 minutes is above the configured threshold."
+
+        - alert: AppRestarting
+          expr: |
+            increase(kube_pod_container_status_restarts_total{
+              namespace="{{ .Release.Namespace }}",
+              pod=~"{{ include "app-api.fullname" . }}-.*"
+            }[15m]) > {{ .Values.prometheusRule.restartsThreshold }}
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ include "app-api.fullname" . }} is restarting"
+            description: "More container restarts than the configured threshold in 15 minutes."
+
+        - alert: AppReplicasUnavailable
+          expr: |
+            kube_deployment_status_replicas_unavailable{
+              namespace="{{ .Release.Namespace }}",
+              deployment="{{ include "app-api.fullname" . }}"
+            } > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ include "app-api.fullname" . }} has unavailable replicas"
+            description: "The Deployment reports fewer ready replicas than desired."
+{{- end }}

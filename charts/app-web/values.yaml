@@ -1,0 +1,97 @@
+# The envelope defaults for a static SPA. One replica, no ingress, no PDB.
+# environments/<env>/values.yaml turns the rest on and is applied last.
+
+app:
+  name: ""
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+    automount: false
+
+image:
+  repository: ""
+  digest: ""
+  pullPolicy: IfNotPresent
+
+platform:
+  chartVersion: "0.1.0"
+
+environment: ""
+
+# poc | internal | external. The external tier refuses fewer than two replicas
+# or no PDB.
+tier: poc
+
+replicaCount: 1
+
+service:
+  port: 8080
+
+probes:
+  livenessPath: /
+  readinessPath: /
+  initialDelaySeconds: 2
+  periodSeconds: 10
+  failureThreshold: 3
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 16Mi
+  limits:
+    memory: 64Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+terminationGracePeriodSeconds: 20
+
+topologySpread:
+  enabled: true
+  topologyKey: kubernetes.io/hostname
+  whenUnsatisfiable: ScheduleAnyway
+
+pdb:
+  enabled: false
+  minAvailable: 1
+
+networkPolicy:
+  enabled: true
+  vpcCidr: 10.20.0.0/16
+  ingressFromVpc: true
+
+ingress:
+  enabled: false
+  host: ""
+  path: /
+  pathType: Prefix
+  groupName: foundry
+  groupOrder: 100
+  certificateArn: ""
+  wafAclArn: ""
+  sslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
+  healthcheckPath: /
+  accessLogs:
+    bucket: ""
+    prefix: ""
+  annotations: {}
+
+# The image is unprivileged nginx; these are the two writable paths it needs on
+# a read-only root filesystem.
+writablePaths:
+  tmp:
+    sizeLimit: 16Mi
+  cache:
+    sizeLimit: 32Mi
+
+nodeSelector: {}
+tolerations: []

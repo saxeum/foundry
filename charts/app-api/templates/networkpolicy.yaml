@@ -1,0 +1,57 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "app-api.fullname" . }}
+  labels:
+    {{- include "app-api.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "app-api.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    {{- if .Values.networkPolicy.ingressFromVpc }}
+    # ALB targets are pod IPs from the VPC. A VPC CIDR is the closest a
+    # NetworkPolicy can get without a security-group reference; under the VPC
+    # CNI pods share that CIDR, so this bounds the edge to the VPC rather than
+    # to the ALB alone. The AppProject is the tenancy boundary.
+    - from:
+        - ipBlock:
+            cidr: {{ .Values.networkPolicy.vpcCidr }}
+      ports:
+        - port: {{ .Values.service.port }}
+          protocol: TCP
+    {{- end }}
+    {{- if .Values.serviceMonitor.enabled }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.monitoringNamespace }}
+      ports:
+        - port: {{ .Values.service.port }}
+          protocol: TCP
+    {{- end }}
+  egress:
+    {{- if gt (int .Values.networkPolicy.databasePort) 0 }}
+    - to:
+        - ipBlock:
+            cidr: {{ .Values.networkPolicy.vpcCidr }}
+      ports:
+        - port: {{ .Values.networkPolicy.databasePort }}
+          protocol: TCP
+    {{- end }}
+    # DNS. Without this, every lookup fails and the failure looks like a
+    # database outage.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+{{- end }}

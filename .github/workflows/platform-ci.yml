@@ -25,3 +25,16 @@ jobs:
       # validate. This is the gate that catches a broken reference before apply.
       - name: Validate every stack
         run: make validate
+
+      - name: Install Helm
+        run: |
+          curl -fsSL https://get.helm.sh/helm-v4.0.0-linux-amd64.tar.gz -o helm.tgz
+          tar -xzf helm.tgz
+          sudo mv linux-amd64/helm /usr/local/bin/helm
+          helm version --short
+
+      - name: Chart lint
+        run: make charts-lint
+
+      - name: Chart contract tests
+        run: make charts-test

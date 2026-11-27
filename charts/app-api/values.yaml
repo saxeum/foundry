@@ -1,0 +1,139 @@
+# The envelope defaults. Safe by default, not production by default: one
+# replica, no ingress, no PDB, no alarms. environments/<env>/values.yaml turns
+# the rest on, and it is applied last, so an app cannot override it.
+
+app:
+  # Required. `app1` becomes `app1-api`; the registry and the app values both
+  # carry it, and an empty value fails the render.
+  name: ""
+  # App-owned configuration. Nothing here is a secret.
+  env: {}
+  # Secret keys mounted as environment variables. The Secret itself is created
+  # by External Secrets or by onboarding; the chart never holds the value.
+  secrets: []
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+    automount: false
+
+image:
+  repository: ""
+  # Required. A tag can move after review; a digest cannot.
+  digest: ""
+  pullPolicy: IfNotPresent
+
+platform:
+  # The chart release the app was rendered against. The conformance check
+  # compares it with the registry pin.
+  chartVersion: "0.1.0"
+
+# dev | staging | prod. Injected as APP_ENV.
+environment: ""
+
+# poc | internal | external. The external tier refuses fewer than two replicas
+# or no PDB; the chart fails rather than rendering a promise it cannot keep.
+tier: poc
+
+log:
+  level: info
+  format: json
+
+replicaCount: 1
+
+service:
+  port: 4000
+
+probes:
+  livenessPath: /healthz
+  readinessPath: /readyz
+  initialDelaySeconds: 3
+  periodSeconds: 10
+  failureThreshold: 3
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 192Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+terminationGracePeriodSeconds: 30
+
+topologySpread:
+  enabled: true
+  topologyKey: kubernetes.io/hostname
+  whenUnsatisfiable: ScheduleAnyway
+
+pdb:
+  enabled: false
+  minAvailable: 1
+
+networkPolicy:
+  enabled: true
+  # The VPC the ALB and RDS live in. ALB targets are pod IPs from here, and RDS
+  # accepts 5432 from the nodes' group.
+  vpcCidr: 10.20.0.0/16
+  databasePort: 5432
+  ingressFromVpc: true
+  monitoringNamespace: monitoring
+
+ingress:
+  enabled: false
+  host: ""
+  path: /api
+  pathType: Prefix
+  groupName: foundry
+  groupOrder: 10
+  certificateArn: ""
+  wafAclArn: ""
+  sslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
+  healthcheckPath: /readyz
+  accessLogs:
+    bucket: ""
+    prefix: ""
+  annotations: {}
+
+migrations:
+  enabled: true
+  # Holds DATABASE_URL_OWNER, the per-app owner credential. Created by
+  # onboarding, synced by External Secrets, mounted only into the hook.
+  ownerSecret:
+    name: ""
+    key: DATABASE_URL_OWNER
+  activeDeadlineSeconds: 600
+  backoffLimit: 0
+
+# The RDS CA bundle. The DSN's sslrootcert points at this path.
+caSecret:
+  name: ""
+  key: global-bundle.pem
+  mountPath: /certs
+
+# ExternalSecret objects to create, one per secret the app declares by name.
+externalSecrets: []
+
+# Off by default: the monitoring CRDs do not exist until the platform's
+# observability stack is installed. environments/<env>/values.yaml turns these
+# on once it is, so a first app sync cannot fail on a missing CRD.
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  path: /metrics
+
+prometheusRule:
+  enabled: false
+  errorRateThreshold: 0.01
+  p99Seconds: 0.5
+  restartsThreshold: 3

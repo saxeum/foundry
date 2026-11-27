@@ -727,11 +727,21 @@ ServiceMonitor, ExternalSecret, PrometheusRule. `docs/app-contract.md` written
 before any app exists.
 
 ```
-helm lint charts/app-api charts/app-web
-helm unittest charts/app-api charts/app-web
+make charts-lint
 ```
 
-Expect no failures. A render against a dummy app goes into the PR as output.
+```
+make charts-test
+```
+
+Expect both clean. `charts-test` renders each chart with `tests/ci-values.yaml`
+and asserts the contract: digest, nonroot, read-only root, probes,
+NetworkPolicy, and for the API the migration Job, PDB, ServiceMonitor,
+PrometheusRule and ExternalSecret. It also proves the digest guard and the
+external-tier guard can fail. No plugin to install.
+
+ServiceMonitor and PrometheusRule default off because their CRDs do not exist
+until P7; `environments/<env>/values.yaml` turns them on.
 
 ### P3 — Argo
 

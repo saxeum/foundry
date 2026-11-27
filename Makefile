@@ -7,11 +7,12 @@ KUBE_CONTEXT ?= foundry-staging
 
 STACKS := bootstrap account alerts network registry data cluster edge argocd
 BACKEND_STACKS := account alerts network registry data cluster edge argocd
+CHARTS := charts/app-api charts/app-web
 
 STACK ?=
 TF_ARGS ?=
 
-.PHONY: help fmt fmt-check validate init plan apply eks-tunnel eks-kubeconfig
+.PHONY: help fmt fmt-check validate init plan apply charts-lint charts-test eks-tunnel eks-kubeconfig
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z0-9_.-]+:.*## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*## "}; {printf "  %-20s %s\n", $$1, $$2}'
@@ -43,6 +44,12 @@ plan: ## Plan one stack: make plan STACK=network [TF_ARGS=...]
 apply: ## Apply one stack: make apply STACK=network [TF_ARGS=...]
 	@test -n "$(STACK)" || { echo "usage: make apply STACK=<stack> [TF_ARGS=...]"; exit 1; }
 	terraform -chdir=terraform/$(STACK) apply $(TF_ARGS)
+
+charts-lint: ## Lint every chart with the contract values
+	@for c in $(CHARTS); do helm lint $$c --kube-version 1.37.0 -f $$c/tests/ci-values.yaml || exit 1; done
+
+charts-test: ## Render every chart and assert the contract
+	./scripts/chart-test.sh
 
 # The EKS API is private. This is the only way to reach it from a laptop; leave
 # it running in its own terminal.
