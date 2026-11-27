@@ -67,12 +67,16 @@ yq -e '.spec.sourceRepos[] | select(. == "https://prometheus-community.github.io
   || fail "platform AppProject does not allow the monitoring chart repo"
 yq -e '.spec.sourceRepos[] | select(. == "https://github.com/saxeum/foundry.git")' "$platform" >/dev/null \
   || fail "platform AppProject does not allow the foundry values repo"
-yq -e '.spec.destinations[0].namespace == "monitoring"' "$platform" >/dev/null \
+yq -e '.spec.destinations[] | select(.namespace == "monitoring")' "$platform" >/dev/null \
   || fail "platform AppProject does not scope monitoring"
+yq -e '.spec.destinations[] | select(.namespace == "kube-system")' "$platform" >/dev/null \
+  || fail "platform AppProject does not allow the control-plane Services"
 yq -e '.spec.clusterResourceWhitelist[] | select(.kind == "CustomResourceDefinition")' "$platform" >/dev/null \
   || fail "platform AppProject does not allow CRDs"
 yq -e '.spec.clusterResourceWhitelist[] | select(.kind == "ClusterRole")' "$platform" >/dev/null \
   || fail "platform AppProject does not allow ClusterRoles"
+yq -e '.spec.clusterResourceWhitelist[] | select(.kind == "Namespace")' "$platform" >/dev/null \
+  || fail "platform AppProject cannot create the monitoring namespace"
 
 # Monitoring is an Application, not a Terraform helm_release: chart from the
 # upstream repo, values from main, wave -2 so the app ApplicationSet waits for
@@ -86,8 +90,6 @@ monitoring=argocd/clusters/staging/addons/monitoring.yaml
   || fail "monitoring destination is not the monitoring namespace"
 yq -e '.spec.sources[] | select(.chart == "kube-prometheus-stack") | .targetRevision == "94.2.0"' "$monitoring" >/dev/null \
   || fail "monitoring chart is not pinned"
-yq -e '.spec.sources[] | select(.chart == "kube-prometheus-stack") | .helm.includeCrds == true' "$monitoring" >/dev/null \
-  || fail "monitoring does not render the operator CRDs"
 yq -e '.spec.sources[] | select(.chart == "kube-prometheus-stack") | .helm.valueFiles[] | select(. == "$values/argocd/addons/monitoring/values-staging.yaml")' "$monitoring" >/dev/null \
   || fail "monitoring Application does not read its values file"
 yq -e '.spec.sources[] | select(.ref == "values") | .targetRevision == "main"' "$monitoring" >/dev/null \

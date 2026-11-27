@@ -24,9 +24,8 @@ spec:
       targetRevision: "94.2.0"
       helm:
         releaseName: monitoring
-        # The operator's CRDs ship in the chart's crds/ directory. Argo must
-        # render them, or the CRs it also applies have no definitions.
-        includeCrds: true
+        # CRDs are rendered unless skipCrds is true. Do not add includeCrds:
+        # this Argo version's Application CRD does not have that field.
         valueFiles:
           - $values/argocd/addons/monitoring/values-staging.yaml
     - repoURL: https://github.com/saxeum/foundry.git
