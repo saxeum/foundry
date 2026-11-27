@@ -22,6 +22,7 @@ The stack order and the same-account rules are in `docs/plan.md` §7.
 | Domain | a zone in Cloudflare; foundry serves `<app>.<zone>` |
 | Alert email | the SNS subscription from `terraform/alerts` |
 | Tools | `terraform >= 1.17`, AWS CLI v2, `kubectl`, `helm`, `argocd`, `gh`, `jq`, `session-manager-plugin` |
+| Platform environment | `cp .env.example .env`; fill `CLOUDFLARE_API_TOKEN` and `TF_VAR_alert_email`. Host make targets source it. |
 
 `terraform/backend.hcl` does not exist yet. It is created in step 4 from the
 bootstrap output, and it is gitignored because the bucket name contains the
@@ -258,6 +259,9 @@ Expected: `foundry-alerts`, the email subscription (confirm it), and
 `foundry-monthly` at `$250`. An apply without `alert_email` creates a topic with
 no subscriber, which is valid and wrong for production.
 
+`make apply STACK=alerts` takes `TF_VAR_alert_email` from `.env`; the raw
+`terraform` commands above take `-var alert_email`.
+
 ---
 
 ## 8. Registry
@@ -343,7 +347,8 @@ Expected: certificate `ISSUED` after the Cloudflare validation record, the LBC
 running in `kube-system`, the WAF ACL in count mode, and the ALB log bucket with
 a lifecycle rule.
 
-`CLOUDFLARE_API_TOKEN` must be in the environment; it is not in the repository.
+`CLOUDFLARE_API_TOKEN` is in `.env` for `make apply`, or exported for a direct
+`terraform` run. It is never in the repository.
 
 ---
 
