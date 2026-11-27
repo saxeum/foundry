@@ -803,7 +803,7 @@ Blocking P1 or P3. Each needs a decision, not a default hidden in code.
 | # | Question | Proposed default |
 |---|---|---|
 | OQ-1 | Is `foundry` public? It determines link 1 (git tag vs OCI + token refresh) | public; scrub account IDs; no secrets in the repo |
-| OQ-2 | New AWS account, or reuse `619071335809`? | new account `foundry`; bootstrap applied once by the human |
+| OQ-2 | New AWS account, or reuse the existing godough account? | new account `foundry`; bootstrap applied once by the human |
 | OQ-3 | Zone: `foonix.net` subdomains? | `<app>.foonix.net`, one wildcard certificate |
 | OQ-4 | Alert destination: SNS email or Slack? | SNS → email first; Slack when there is an on-call |
 | OQ-5 | Prod trigger | first external-tier customer with data |
