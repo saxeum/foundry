@@ -236,9 +236,11 @@ foundry/
 ├── argocd/
 │   ├── root/application.yaml
 │   ├── apps/<app>.yaml          # registry, read by the git generator
+│   ├── addons/monitoring/values-staging.yaml
 │   └── clusters/staging/
 │       ├── appset.yaml          # matrix(apps, environments); api + web sources
-│       └── projects/<app>.yaml  # AppProject per app
+│       ├── addons/monitoring.yaml
+│       └── projects/{<app>,platform}.yaml
 ├── environments/
 │   ├── dev/values.yaml
 │   └── staging/values.yaml
@@ -515,6 +517,19 @@ limit 5 with backoff.
 declared `platform.chartVersion` equals the registry pin. Run nightly and on
 every platform PR. A mismatch is a failed build, not a surprise rollout.
 
+### 9.5 Platform addons
+
+The root also applies a platform AppProject at wave `-3` and the monitoring
+Application at wave `-2`. The project is the only one with a
+`clusterResourceWhitelist`, and it lists only what the chart actually creates.
+The root waits for the monitoring Application to be Healthy before creating the
+app ApplicationSet at wave `0`, so the `ServiceMonitor` and `PrometheusRule`
+CRDs exist before the first app sync.
+
+The chart is a release tag; its values are read from `main`, like the app
+profiles and environments. Prune is off: the stack owns persistent volumes, and
+removing a resource is a deliberate act.
+
 ---
 
 ## 10. Promotion
@@ -642,13 +657,18 @@ description.
 
 Chosen stack, recorded as a decision (DR-008):
 
-- **Metrics**: kube-prometheus-stack — Prometheus, Alertmanager, Grafana,
-  kube-state-metrics, node-exporter. Portable, standard, one install.
-- **App metrics**: `/metrics` + `ServiceMonitor` from the chart.
+- **Metrics**: kube-prometheus-stack, installed as the `monitoring` Argo
+  Application (chart from `prometheus-community`, values in this repo, wave
+  `-2`). Prometheus, Alertmanager, kube-state-metrics, node-exporter. Grafana is
+  off until there is an auth story; a default password on a port-forward is not
+  a login.
+- **App metrics**: `/metrics` + `ServiceMonitor` from the chart; staging turns
+  the switches on in P7b.
 - **Logs**: Fluent Bit DaemonSet → CloudWatch Logs, 30-day retention. The app
   already writes one JSON line per request; the platform makes it durable.
 - **Alerts**: `PrometheusRule` per app (5xx ratio, p99, restarts, unavailable
-  replicas) plus RDS and ALB CloudWatch alarms. Alertmanager → SNS.
+  replicas) plus RDS and ALB CloudWatch alarms. Alertmanager → SNS through an
+  IRSA role on the alerts topic (P7b).
 - **SLO**: external 99.9% availability and p99 < 500 ms; internal 99.5%; poc
   none. The number is in `environments/<env>/values.yaml`, so it is a policy, not
   a paragraph.
@@ -815,16 +835,31 @@ Expect green tests, green e2e, Synced/Healthy for `app1-dev` and `app1-staging`.
 Record in this file: **hours and files to instantiate** — the platform's real
 benchmark.
 
-### P7 — observability
+### P7a — monitoring is an Argo Application
 
-Metrics, logs, alarms, SLO, runbooks. Prove an alarm can fire.
+`argocd/clusters/staging/projects/platform.yaml` and
+`argocd/clusters/staging/addons/monitoring.yaml`: kube-prometheus-stack 94.2.0,
+values from `main`, wave `-2`, Grafana off. Alertmanager has no receiver yet.
+
+```
+make check-argocd
+```
+
+Expect `argocd ok` with the addon assertions. After #12, `argocd app get
+monitoring` is Synced/Healthy and the `monitoring.coreos.com` CRDs exist.
+
+### P7b — alarms reach someone
+
+Turn on `serviceMonitor` and `prometheusRule` in `environments/staging`, add the
+Alertmanager IRSA role in `terraform/edge` with `sns:Publish` on
+`foundry-alerts`, configure the SNS receiver, and write the runbook.
 
 ```
 promtool check rules charts/app-api/templates/prometheusrule.yaml
 ```
 
-Expect no rule errors, and a named alarm firing on a forced 5xx in the PR
-evidence.
+Expect no rule errors, and a named alarm firing on a forced 5xx, delivered to
+SNS.
 
 ### P8 — hardening and onboarding
 

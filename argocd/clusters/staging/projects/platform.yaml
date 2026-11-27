@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+  annotations:
+    # Projects first, then the addon Applications, then the app ApplicationSet.
+    argocd.argoproj.io/sync-wave: "-3"
+spec:
+  description: Platform addons. The only project allowed cluster-scoped resources.
+  sourceRepos:
+    - https://github.com/saxeum/foundry.git
+    - https://prometheus-community.github.io/helm-charts
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: monitoring
+  # The chart genuinely creates these. Anything outside this list is a chart
+  # upgrade that needs a platform decision, not a silent grant.
+  clusterResourceWhitelist:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
