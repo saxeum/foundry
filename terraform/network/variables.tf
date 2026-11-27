@@ -11,7 +11,7 @@ variable "project" {
 }
 
 variable "vpc_cidr" {
-  description = "CIDR for the foundry VPC. Must not overlap godough's 10.42.0.0/16 or the default VPC's 172.31.0.0/16."
+  description = "CIDR for the foundry VPC. Must not overlap an existing VPC; 10.42.0.0/16 was godough's, 10.20.0.0/16 is foundry's."
   type        = string
   default     = "10.20.0.0/16"
 

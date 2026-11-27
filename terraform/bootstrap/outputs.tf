@@ -19,6 +19,6 @@ output "state_kms_key_arn" {
 }
 
 output "github_oidc_provider_arn" {
-  description = "The existing, account-global GitHub Actions OIDC provider. Read, never created here."
-  value       = data.aws_iam_openid_connect_provider.github.arn
+  description = "The GitHub Actions OIDC provider, created or read according to manage_oidc_provider."
+  value       = local.oidc_provider_arn
 }

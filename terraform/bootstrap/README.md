@@ -4,14 +4,22 @@ The one stack that is applied by hand, once, and the only one whose state is
 local. It creates the S3 bucket every other stack stores its state in; a bucket
 cannot hold the state of the stack that creates it.
 
-It also **reads** the existing GitHub Actions OIDC provider and outputs its ARN.
-It never creates one. AWS allows one provider per URL per account, and this
-account already has one from `godough`; a second apply would fail with
-`EntityAlreadyExists`, which is the correct outcome and the reason this is a data
-source rather than a resource.
+It also owns the GitHub Actions OIDC provider, in one of two modes:
 
-It does not create GuardDuty or CloudTrail. Those are account-global and already
-owned by `godough`'s `security` stack. See `docs/plan.md` §7.0.
+- `manage_oidc_provider = true` (default): create it. Correct for a fresh
+  account.
+- `manage_oidc_provider = false`: read the one the account already has. Correct
+  when another platform ran here, because AWS allows one provider per URL and a
+  second create fails with `EntityAlreadyExists`.
+
+Check which case you are in before applying; the command is in
+`docs/runbooks/bootstrap-platform.md`. On this account the provider still exists,
+so the first apply should set `-var manage_oidc_provider=false` unless it is
+deleted first.
+
+It does not create GuardDuty or CloudTrail. Those are in `terraform/account`, a
+separate stack so its state can be replaced without touching the bucket and the
+key.
 
 ## Apply
 
@@ -22,6 +30,9 @@ terraform init
 terraform plan
 terraform apply
 ```
+
+For an account that already has the provider, add
+`-var manage_oidc_provider=false` to the plan and apply.
 
 Expected: `foundry-terraform-state-<account>` exists, versioned, SSE-KMS, public
 access blocked, TLS-only; the outputs include `github_oidc_provider_arn`.

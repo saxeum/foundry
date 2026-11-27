@@ -5,15 +5,31 @@ locals {
   # collision suffix. One bucket for the platform, not one per environment.
   state_bucket = "${var.project}-terraform-state-${data.aws_caller_identity.current.account_id}"
 
-  # The provider is account-global and one per URL. It already exists because
-  # godough's stack created it; a second aws_iam_openid_connect_provider for the
-  # same URL fails with EntityAlreadyExists. Reading it here is also the
-  # preflight: if it is missing, this stack stops instead of creating a duplicate.
-  oidc_provider_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${var.github_oidc_host}"
+  # The provider is account-global and one per URL. Whether foundry creates it
+  # or reads it is a variable because both cases are real: a fresh account has
+  # none, and an account that previously ran another platform already has one.
+  oidc_url = "https://${var.github_oidc_host}"
+  oidc_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${var.github_oidc_host}"
+
+  oidc_provider_arn = var.manage_oidc_provider ? aws_iam_openid_connect_provider.github[0].arn : data.aws_iam_openid_connect_provider.github[0].arn
 }
 
+resource "aws_iam_openid_connect_provider" "github" {
+  count = var.manage_oidc_provider ? 1 : 0
+
+  url            = local.oidc_url
+  client_id_list = ["sts.amazonaws.com"]
+
+  thumbprint_list = var.github_oidc_thumbprints
+}
+
+# The other half of the same choice: read the provider the account already has.
+# This is the preflight when manage_oidc_provider is false; if the provider is
+# missing, the plan stops here rather than creating a role that trusts nothing.
 data "aws_iam_openid_connect_provider" "github" {
-  arn = local.oidc_provider_arn
+  count = var.manage_oidc_provider ? 0 : 1
+
+  arn = local.oidc_arn
 }
 
 resource "aws_s3_bucket" "state" {
