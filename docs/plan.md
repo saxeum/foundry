@@ -763,16 +763,25 @@ verified after #12, when the cluster exists.
 
 ### P4 — platform-go
 
-Extract config, lifecycle, httpkit (request ID, access log, recoverer, deadline,
-no-store, body guards), probes, metrics and the migrate runner. A nested module,
-tagged `go/v0.1.0`.
+The nested module `github.com/saxeum/foundry/go`: config, httpkit (request ID,
+access log, recoverer, deadline, no-store, body guards, client IP, probes,
+metrics), the migrate runner, the pool and the process lifecycle. No domain
+types.
 
 ```
-cd ../godough-copy && go test ./...
+make platform-go-lint
 ```
 
-Expect the same green suite as `godough`, with imports swapped and the domain
-untouched.
+```
+make platform-go-test
+```
+
+Expect both clean. The tests cover the handlers, guards, probes, metrics,
+config, pool and the migration unit tests; the database migration tests run when
+`TEST_DATABASE_URL_OWNER` is set and skip under `-short`.
+
+`godough` is not a drop-in swap: the module exposes a smaller API on purpose.
+The integration proof is P5/P6, where the template and app1 consume it.
 
 ### P5 — template
 
