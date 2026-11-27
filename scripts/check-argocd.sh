@@ -76,6 +76,8 @@ for registry in argocd/apps/*.yaml; do
   [ -n "$tier" ] && [ "$tier" != "null" ] || fail "$registry has no tier"
   [ -n "$chart_version" ] && [ "$chart_version" != "null" ] || fail "$registry has no chartVersion"
   [ -n "$host" ] && [ "$host" != "null" ] || fail "$registry has no host"
+  web=$(yq -r '.web' "$registry")
+  [ "$web" = "true" ] || [ "$web" = "false" ] || fail "$registry has no web boolean"
 
   [ -f "profiles/${tier}/values.yaml" ] || fail "missing profiles/${tier}/values.yaml for $name"
 
@@ -90,6 +92,8 @@ for registry in argocd/apps/*.yaml; do
     || fail "$project does not scope ${namespace}-*"
   [ "$(yq -r '.spec.clusterResourceWhitelist | length' "$project")" = "0" ] \
     || fail "$project allows cluster-scoped resources"
+  [ "$(yq -r '.metadata.annotations["argocd.argoproj.io/sync-wave"]' "$project")" = "-1" ] \
+    || fail "$project is not applied before the ApplicationSet"
 done
 
 # The ApplicationSet, rendered with the sample app.
@@ -140,6 +144,8 @@ yq -e '.spec.template.spec.syncPolicy.syncOptions[] | select(. == "CreateNamespa
   || fail "appset does not enforce restricted PSA"
 [ "$(yq -r '.spec.template.spec.syncPolicy.automated.prune' "$rendered")" = "false" ] \
   || fail "appset prunes workloads"
+[ "$(yq -r '.metadata.annotations["argocd.argoproj.io/sync-wave"]' "$rendered")" = "0" ] \
+  || fail "appset has no sync wave"
 
 # Environment and profile files parse and carry the keys the chart expects.
 for file in environments/*/values.yaml profiles/*/values.yaml; do

@@ -6,6 +6,8 @@ kind: ApplicationSet
 metadata:
   name: apps
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   goTemplate: true
   goTemplateOptions: ["missingkey=error"]
