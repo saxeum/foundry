@@ -53,3 +53,6 @@ jobs:
 
       - name: Argo tree
         run: make check-argocd
+
+      - name: Template tests
+        run: make template-test

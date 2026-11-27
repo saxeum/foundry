@@ -1,0 +1,94 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Format and vet
+        run: make lint
+      - name: Unit tests
+        run: make test
+      - name: Generated code is current
+        run: make codegen-check
+
+  conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Helm
+        run: |
+          curl -fsSL https://get.helm.sh/helm-v4.0.0-linux-amd64.tar.gz -o helm.tgz
+          tar -xzf helm.tgz
+          sudo mv linux-amd64/helm /usr/local/bin/helm
+      - name: Render against the declared chart
+        run: make conformance
+
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [test, conformance]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+        with:
+          role-to-assume: ${{ vars.AWS_PUSH_ROLE_ARN }}
+          aws-region: ap-southeast-2
+      - name: Build and push by SHA
+        id: push
+        run: |
+          aws ecr get-login-password --region ap-southeast-2 \
+            | docker login --username AWS --password-stdin "${{ vars.ECR_REGISTRY }}"
+          image="${{ vars.ECR_REGISTRY }}/__APP_NAME__-api:$GITHUB_SHA"
+          docker build -t "$image" .
+          docker push "$image"
+          digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$image" | cut -d@ -f2)
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+  dev-digest:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Open the dev digest PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DIGEST: ${{ needs.publish.outputs.digest }}
+        run: |
+          branch="dev-digest-${GITHUB_SHA::12}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          sed -i "s|^  digest: .*|  digest: $DIGEST|" deploy/api/values-dev.yaml
+          if git diff --quiet; then
+            echo "dev digest is already current"
+            exit 0
+          fi
+          git commit -am "dev: __APP_NAME__-api $DIGEST"
+          git push origin "$branch"
+          if [ -z "$(gh pr list --head "$branch" --json number --jq '.[0].number')" ]; then
+            gh pr create --head "$branch" --base main \
+              --title "dev: __APP_NAME__-api $DIGEST" \
+              --body "Built from $GITHUB_SHA. This PR touches only deploy/api/values-dev.yaml."
+          fi

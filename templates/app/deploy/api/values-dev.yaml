@@ -1,0 +1,4 @@
+# CI writes this one line on main; the dev digest is the only app value that
+# changes between deploys.
+image:
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
