@@ -3,7 +3,7 @@ repo: https://github.com/saxeum/app1.git
 revision: main
 namespace: app1
 tier: internal
-chartVersion: "0.4.0"
+chartVersion: "0.4.1"
 host: app1.foonix.net
 # app1 has a SPA in ui/, published as app1-web, with deploy/web/values*.yaml
 # carrying the digests. The web source is the fourth one; its ingress joins the
