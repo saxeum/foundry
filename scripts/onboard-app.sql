@@ -14,5 +14,9 @@ WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'app_role') \gexec
 
 SELECT format('ALTER ROLE %I PASSWORD %L', :'app_role', :'app_pw') \gexec
 
+-- CREATE DATABASE ... OWNER requires the current role to be able to SET ROLE to
+-- the owner; the RDS master is not a member by default.
+SELECT format('GRANT %I TO %I', :'owner_role', :'master_role') \gexec
+
 SELECT format('CREATE DATABASE %I OWNER %I', :'app_db', :'owner_role')
 WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = :'app_db') \gexec

@@ -18,6 +18,8 @@ cd "$(dirname "$0")/.."
 app="${1:-}"
 env="${2:-staging}"
 ca="${CA_BUNDLE:-global-bundle.pem}"
+# foundry's cluster has its own kubeconfig; do not fall back to a stale default.
+export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/foundry}"
 
 if [[ ! "$app" =~ ^[a-z][a-z0-9-]{1,30}$ ]]; then
   echo "usage: $0 <app> [dev|staging]" >&2
@@ -65,6 +67,7 @@ PGPASSWORD="$master_pw" psql "$master_dsn" -q -v ON_ERROR_STOP=1 \
   -v app_db="$db" \
   -v owner_role="$owner_role" \
   -v app_role="$app_role" \
+  -v master_role="$master_user" \
   -v owner_pw="$owner_pw" \
   -v app_pw="$app_pw" \
   -f scripts/onboard-app.sql >/dev/null
