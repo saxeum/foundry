@@ -209,7 +209,7 @@ image:
   repository: example/app1-api
   digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
 platform:
-  chartVersion: "0.2.0"
+  chartVersion: "0.3.0"
 YAML
 
   cat >"$tmp/web-values.yaml" <<'YAML'
@@ -219,14 +219,18 @@ image:
   repository: example/app1-web
   digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
 platform:
-  chartVersion: "0.2.0"
+  chartVersion: "0.3.0"
 YAML
 
   for env in dev staging; do
+    # The ApplicationSet passes the host as a parameter, so the render does too:
+    # a staging overlay with ingress on needs it, and rendering without it would
+    # test a configuration that never ships.
     helm template app1-api charts/app-api --kube-version 1.37.0 \
       -f "$tmp/api-values.yaml" \
       -f profiles/internal/values.yaml \
       -f "environments/$env/values.yaml" \
+      --set ingress.host=app1.foonix.net \
       --set migrations.ownerSecret.name=app1-owner \
       --set caSecret.name=foundry-rds-ca >"$tmp/api-$env.yaml" \
       || fail "api overlay $env does not render"
@@ -246,7 +250,8 @@ YAML
     helm template app1-web charts/app-web --kube-version 1.37.0 \
       -f "$tmp/web-values.yaml" \
       -f profiles/internal/values.yaml \
-      -f "environments/$env/values.yaml" >"$tmp/web-$env.yaml" \
+      -f "environments/$env/values.yaml" \
+      --set ingress.host=app1.foonix.net >"$tmp/web-$env.yaml" \
       || fail "web overlay $env does not render"
 
     web_replicas=$(yq -r 'select(.kind == "Deployment") | .spec.replicas' "$tmp/web-$env.yaml")

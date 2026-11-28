@@ -7,14 +7,17 @@ replicaCount: 2
 pdb:
   enabled: true
 
-# Turn this on after terraform/edge has a certificate and a WAF ACL, and after
-# the edge CNAME exists. The host comes from the registry, not from here.
+# The edge exists: `terraform/edge` issued the wildcard certificate, created the
+# WAF ACL and the ALB log bucket, and installed the controller. The host comes
+# from the registry, not from here. The CNAME is created by a second
+# `terraform/edge` apply once the first Ingress has produced an ALB hostname
+# (`-var alb_hostname=...`), because the ALB does not exist before this syncs.
 ingress:
-  enabled: false
-  certificateArn: ""
-  wafAclArn: ""
+  enabled: true
+  certificateArn: arn:aws:acm:ap-southeast-2:619071335809:certificate/a29e4b79-d941-49aa-86e5-de2ab97de85b
+  wafAclArn: arn:aws:wafv2:ap-southeast-2:619071335809:regional/webacl/foundry-edge/041b1a28-7eae-4916-9997-313186c690a6
   accessLogs:
-    bucket: ""
+    bucket: foundry-alb-logs-619071335809
     prefix: foundry
 
 # The monitoring CRDs exist and the Application is Healthy.

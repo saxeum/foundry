@@ -26,7 +26,7 @@ image:
 platform:
   # The chart release the app was rendered against. The conformance check
   # compares it with the registry pin.
-  chartVersion: "0.2.0"
+  chartVersion: "0.3.0"
 
 # dev | staging | prod. Injected as APP_ENV.
 environment: ""
