@@ -87,6 +87,15 @@ grafana:
   enabled: false
 
 prometheusOperator:
+  # The chart's self-signed admission webhook needs a hook Job that deletes
+  # itself on success; Argo then reports the missing Job and retries the sync.
+  # The operator does not need admission validation for this platform.
+  admissionWebhooks:
+    enabled: false
+  # The operator's webhook TLS secret is created by the same job; with no
+  # admission webhooks there is no TLS endpoint to serve.
+  tls:
+    enabled: false
   resources:
     requests:
       cpu: 100m

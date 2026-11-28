@@ -35,9 +35,11 @@ spec:
   syncPolicy:
     automated:
       selfHeal: true
-      # The stack owns PVs. Pruning a removed resource is a deliberate act, not
-      # something a values edit should do.
-      prune: false
+      # The chart's rules, Services and ServiceMonitors are Argo resources and
+      # must disappear when a values key turns them off. The operator-created
+      # StatefulSets and PVCs are not Argo resources, so pruning does not
+      # delete the data volumes.
+      prune: true
     syncOptions:
       - CreateNamespace=true
       # The operator CRDs are too large for the client-side apply annotation.
