@@ -13,6 +13,11 @@ pdb:
 ingress:
   enabled: false
 
+# The API fetches the OIDC discovery document at boot, so without 443 egress the
+# pod crash-loops. This is not part of the edge being off.
+networkPolicy:
+  allowHTTPS: true
+
 serviceMonitor:
   enabled: false
 
