@@ -671,8 +671,8 @@ Chosen stack, recorded as a decision (DR-008):
 - **Logs**: Fluent Bit DaemonSet → CloudWatch Logs, 30-day retention. The app
   already writes one JSON line per request; the platform makes it durable.
 - **Alerts**: `PrometheusRule` per app (5xx ratio, p99, restarts, unavailable
-  replicas) plus RDS and ALB CloudWatch alarms. Alertmanager → SNS through an
-  IRSA role on the alerts topic (P7b).
+  replicas) plus RDS and ALB CloudWatch alarms. Alertmanager → SNS through the
+  `foundry-alertmanager` IRSA role, scoped to `sns:Publish` on `foundry-alerts`.
 - **SLO**: external 99.9% availability and p99 < 500 ms; internal 99.5%; poc
   none. The number is in `environments/<env>/values.yaml`, so it is a policy, not
   a paragraph.
@@ -854,16 +854,19 @@ monitoring` is Synced/Healthy and the `monitoring.coreos.com` CRDs exist.
 
 ### P7b — alarms reach someone
 
-Turn on `serviceMonitor` and `prometheusRule` in `environments/staging`, add the
-Alertmanager IRSA role in `terraform/edge` with `sns:Publish` on
-`foundry-alerts`, configure the SNS receiver, and write the runbook.
+`terraform/edge` creates `foundry-alertmanager` (IRSA for
+`system:serviceaccount:monitoring:alertmanager`, `sns:Publish` on
+`foundry-alerts` only). The monitoring values annotate that service account and
+route Alertmanager to the SNS receiver; `environments/staging` turns on
+`serviceMonitor` and `prometheusRule`.
 
 ```
 promtool check rules charts/app-api/templates/prometheusrule.yaml
 ```
 
 Expect no rule errors, and a named alarm firing on a forced 5xx, delivered to
-SNS.
+SNS. Until an app exists, the same path can be proven by posting a synthetic
+alert to the Alertmanager API and watching the topic's publish count.
 
 ### P8 — hardening and onboarding
 

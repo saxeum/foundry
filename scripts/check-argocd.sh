@@ -114,6 +114,12 @@ yq -e '.provisioner == "ebs.csi.aws.com"' argocd/clusters/staging/addons/storage
   || fail "prometheus retention is not set"
 [ "$(yq -r '.grafana.enabled' argocd/addons/monitoring/values-staging.yaml)" = "false" ] \
   || fail "grafana is enabled without an auth story"
+[ "$(yq -r '.alertmanager.serviceAccount.name' argocd/addons/monitoring/values-staging.yaml)" = "alertmanager" ] \
+  || fail "Alertmanager service account name does not match the IRSA trust"
+[ "$(yq -r '.alertmanager.serviceAccount.annotations["eks.amazonaws.com/role-arn"]' argocd/addons/monitoring/values-staging.yaml)" = "arn:aws:iam::619071335809:role/foundry-alertmanager" ] \
+  || fail "Alertmanager service account is not annotated with the IRSA role"
+yq -e '.alertmanager.config.receivers[] | select(.name == "sns") | .sns_configs[0].topic_arn == "arn:aws:sns:ap-southeast-2:619071335809:foundry-alerts"' argocd/addons/monitoring/values-staging.yaml >/dev/null \
+  || fail "Alertmanager has no SNS receiver for foundry-alerts"
 
 # One registry file and one AppProject per app, and they agree.
 for registry in argocd/apps/*.yaml; do
@@ -230,6 +236,11 @@ done
 for profile in profiles/*/values.yaml; do
   [ -n "$(yq -r '.tier // ""' "$profile")" ] || fail "$profile has no tier"
 done
+
+[ "$(yq -r '.serviceMonitor.enabled' environments/staging/values.yaml)" = "true" ] \
+  || fail "staging does not scrape app ServiceMonitors"
+[ "$(yq -r '.prometheusRule.enabled' environments/staging/values.yaml)" = "true" ] \
+  || fail "staging does not apply app PrometheusRules"
 
 # The real overlay: app values, then the profile, then the environment, exactly
 # as the ApplicationSet orders them. This is what proves precedence and that the
