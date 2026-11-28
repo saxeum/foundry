@@ -26,7 +26,7 @@ image:
 platform:
   # The chart release the app was rendered against. The conformance check
   # compares it with the registry pin.
-  chartVersion: "0.3.0"
+  chartVersion: "0.4.0"
 
 # dev | staging | prod. Injected as APP_ENV.
 environment: ""
@@ -88,6 +88,10 @@ networkPolicy:
   databasePort: 5432
   ingressFromVpc: true
   monitoringNamespace: monitoring
+  # An app that signs users in with an OIDC provider has to reach the provider
+  # for discovery, token exchange and the signing keys. The default stays
+  # closed: only an app that declares it needs the internet gets it.
+  allowHTTPS: false
 
 ingress:
   enabled: false

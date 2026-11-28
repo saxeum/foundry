@@ -12,6 +12,10 @@ pdb:
 # from the registry, not from here. The CNAME is created by a second
 # `terraform/edge` apply once the first Ingress has produced an ALB hostname
 # (`-var alb_hostname=...`), because the ALB does not exist before this syncs.
+networkPolicy:
+  # app1 signs users in with Google: the pod has to reach accounts.google.com.
+  allowHTTPS: true
+
 ingress:
   enabled: true
   certificateArn: arn:aws:acm:ap-southeast-2:619071335809:certificate/a29e4b79-d941-49aa-86e5-de2ab97de85b

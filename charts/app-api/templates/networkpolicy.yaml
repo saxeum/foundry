@@ -43,6 +43,15 @@ spec:
         - port: {{ .Values.networkPolicy.databasePort }}
           protocol: TCP
     {{- end }}
+    {{- if .Values.networkPolicy.allowHTTPS }}
+    # OIDC sign-in: discovery, token exchange and the JWKS fetch are all calls
+    # to the identity provider. Anywhere on 443 rather than the provider's
+    # published ranges, because those change and a stale list fails closed at
+    # the worst moment. The app's own tenancy boundary is the AppProject.
+    - ports:
+        - port: 443
+          protocol: TCP
+    {{- end }}
     # DNS. Without this, every lookup fails and the failure looks like a
     # database outage.
     - to:

@@ -94,7 +94,7 @@ credentials or platform secrets.
 | Platform repo | `foundry` | `~/soper/foundry`, `github.com/saxeum/foundry` |
 | App repos | the product name | `app1`, `godough` |
 | Go module | `github.com/saxeum/foundry/go` (nested, tag `go/vX.Y.Z`) | — |
-| Chart release | platform semver tag `vX.Y.Z` | `v0.3.0` |
+| Chart release | platform semver tag `vX.Y.Z` | `v0.4.0` |
 | Chart names | generic | `app-api`, `app-web` |
 | Namespaces | `<app>-<env>` | `app1-dev`, `app1-staging` |
 | Argo Application | `<app>-<env>` | `app1-staging` |
@@ -127,7 +127,7 @@ repo: https://github.com/saxeum/app1.git
 revision: main
 namespace: app1
 tier: internal                 # poc | internal | external
-chartVersion: "0.3.0"          # platform release tag; the upgrade pin
+chartVersion: "0.4.0"          # platform release tag; the upgrade pin
 host: app1.foonix.net
 web: true                      # false omits the SPA source
 database: app1
@@ -145,7 +145,7 @@ checks the key set. The repository and digest are per component.
 ```yaml
 # deploy/api/values.yaml
 platform:
-  chartVersion: "0.3.0"        # must equal argocd/apps/app1.yaml
+  chartVersion: "0.4.0"        # must equal argocd/apps/app1.yaml
 image:
   repository: 000000000000.dkr.ecr.ap-southeast-2.amazonaws.com/app1-api
 app:

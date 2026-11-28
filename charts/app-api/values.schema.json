@@ -114,6 +114,7 @@
         "vpcCidr": { "type": "string" },
         "databasePort": { "type": "integer" },
         "ingressFromVpc": { "type": "boolean" },
+        "allowHTTPS": { "type": "boolean" },
         "monitoringNamespace": { "type": "string" }
       }
     },
