@@ -46,11 +46,12 @@ spec:
           targetRevision: '{{ .revision }}'
           ref: app
 
-        # Platform configuration, not the chart release: profiles and
-        # environments are read from main. The chart sources below are the
-        # release tag, so a values change does not require a chart release.
+        # Platform configuration: profiles and environments. Argo rejects an
+        # Application that reads one repository at two revisions, so this ref
+        # is the same release tag as the chart sources below and the envelope
+        # ships in that tag. A profile or environment change is a chart release.
         - repoURL: https://github.com/saxeum/foundry.git
-          targetRevision: main
+          targetRevision: 'v{{ .chartVersion }}'
           ref: foundry
 
         - repoURL: https://github.com/saxeum/foundry.git

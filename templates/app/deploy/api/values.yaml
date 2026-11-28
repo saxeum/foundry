@@ -1,7 +1,7 @@
 # App-owned values only: `platform`, `image`, `app`. The chart schema rejects
 # anything else, and the environment/profile values win over these.
 platform:
-  chartVersion: "0.1.0"
+  chartVersion: "0.2.0"
 
 app:
   name: __APP_NAME__

@@ -24,7 +24,13 @@ done < <(find argocd -name '*.yaml' -type f | sort)
 appset=argocd/clusters/staging/appset.yaml
 rendered="$tmp/appset.yaml"
 
-python3 - "$appset" "$rendered" <<'PY'
+# Render with the pin the registry actually declares, so the assertions below
+# follow a chart release instead of a literal that has to be edited twice.
+chart_version=$(yq -r '.chartVersion' argocd/apps/app1.yaml)
+[ -n "$chart_version" ] && [ "$chart_version" != "null" ] || fail "registry has no chartVersion"
+foundry_tag="v${chart_version}"
+
+python3 - "$appset" "$rendered" "$chart_version" <<'PY'
 import sys
 
 src = open(sys.argv[1]).read()
@@ -37,7 +43,7 @@ for key, value in {
     ".repo": "https://github.com/saxeum/app1.git",
     ".revision": "main",
     ".namespace": "app1",
-    ".chartVersion": "0.1.0",
+    ".chartVersion": sys.argv[3],
     ".host": "app1.foonix.net",
 }.items():
     src = src.replace("{{ " + key + " }}", value)
@@ -147,6 +153,12 @@ for registry in argocd/apps/*.yaml; do
   [ -n "$namespace" ] && [ "$namespace" != "null" ] || fail "$registry has no namespace"
   [ -n "$tier" ] && [ "$tier" != "null" ] || fail "$registry has no tier"
   [ -n "$chart_version" ] && [ "$chart_version" != "null" ] || fail "$registry has no chartVersion"
+  # The pin names the git tag Argo reads. Charts/*/Chart.yaml is the one place
+  # the version is written down; make release tags that value.
+  for chart in charts/app-api charts/app-web; do
+    [ "$chart_version" = "$(yq -r '.version' "$chart/Chart.yaml")" ] \
+      || fail "$registry pins $chart_version but $chart/Chart.yaml is $(yq -r '.version' "$chart/Chart.yaml")"
+  done
   [ -n "$host" ] && [ "$host" != "null" ] || fail "$registry has no host"
   web=$(yq -r '.web' "$registry")
   [ "$web" = "true" ] || [ "$web" = "false" ] || fail "$registry has no web boolean"
@@ -188,15 +200,23 @@ for ref in app foundry; do
     || fail "appset has no $ref ref"
 done
 
-# The app ref follows the registry revision; the foundry ref is platform
-# configuration and must not be pinned to the chart tag, which predates the
-# profile and environment files.
+# The app ref follows the registry revision. The foundry ref carries the
+# profile and environment values and must be the same release tag as the chart
+# sources: Argo rejects one repository read at two revisions.
 yq -e '.spec.template.spec.sources[] | select(.ref == "app") | .targetRevision == "main"' "$rendered" >/dev/null \
   || fail "app ref is not the registry revision"
-yq -e '.spec.template.spec.sources[] | select(.ref == "foundry") | .targetRevision == "main"' "$rendered" >/dev/null \
-  || fail "foundry ref is pinned to the chart tag; platform values live on main"
+yq -e ".spec.template.spec.sources[] | select(.ref == \"foundry\") | .targetRevision == \"$foundry_tag\"" "$rendered" >/dev/null \
+  || fail "foundry ref is not the chart release tag"
 yq -e '.spec.template.spec.sources[] | select(.ref == "foundry") | has("path") | not' "$rendered" >/dev/null \
   || fail "foundry ref must be a value source, not a path"
+
+# The gate #39 was missing. foundry values from main plus charts from the tag
+# is exactly what Argo refuses to generate.
+for repo in $(yq -r '.spec.template.spec.sources[].repoURL' "$rendered" | sort -u); do
+  revisions=$(yq -r ".spec.template.spec.sources[] | select(.repoURL == \"$repo\") | .targetRevision" "$rendered" | sort -u | sed '/^$/d')
+  count=$(printf '%s\n' "$revisions" | wc -l | tr -d ' ')
+  [ "$count" = "1" ] || fail "$repo is read at $count revisions; Argo CD allows one"
+done
 
 [ -n "$(yq -r '.spec.templatePatch // ""' "$rendered")" ] \
   || fail "appset has no templatePatch to drop the web source"
@@ -215,9 +235,9 @@ do
     || fail "appset is missing valueFile $value_file"
 done
 
-yq -e '.spec.template.spec.sources[] | select(.path == "charts/app-api") | .targetRevision == "v0.1.0"' "$rendered" >/dev/null \
+yq -e ".spec.template.spec.sources[] | select(.path == \"charts/app-api\") | .targetRevision == \"$foundry_tag\"" "$rendered" >/dev/null \
   || fail "api chart is not pinned to the release tag"
-yq -e '.spec.template.spec.sources[] | select(.path == "charts/app-web") | .targetRevision == "v0.1.0"' "$rendered" >/dev/null \
+yq -e ".spec.template.spec.sources[] | select(.path == \"charts/app-web\") | .targetRevision == \"$foundry_tag\"" "$rendered" >/dev/null \
   || fail "web chart is not pinned to the release tag"
 
 yq -e '.spec.template.spec.sources[] | select(.path == "charts/app-api") | .helm.parameters[] | select(.name == "migrations.ownerSecret.name") | .value == "app1-owner"' "$rendered" >/dev/null \
@@ -263,7 +283,7 @@ image:
   repository: example/app1-api
   digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
 platform:
-  chartVersion: "0.1.0"
+  chartVersion: "0.2.0"
 YAML
 
   cat >"$tmp/web-values.yaml" <<'YAML'
@@ -273,7 +293,7 @@ image:
   repository: example/app1-web
   digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
 platform:
-  chartVersion: "0.1.0"
+  chartVersion: "0.2.0"
 YAML
 
   for env in dev staging; do

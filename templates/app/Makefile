@@ -1,5 +1,5 @@
 APP := __APP_NAME__
-CHART_VERSION ?= 0.1.0
+CHART_VERSION ?= 0.2.0
 GO ?= go
 OAPI := go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.9.0
 
