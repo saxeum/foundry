@@ -77,6 +77,8 @@ yq -e '.spec.clusterResourceWhitelist[] | select(.kind == "ClusterRole")' "$plat
   || fail "platform AppProject does not allow ClusterRoles"
 yq -e '.spec.clusterResourceWhitelist[] | select(.kind == "Namespace")' "$platform" >/dev/null \
   || fail "platform AppProject cannot create the monitoring namespace"
+yq -e '.spec.clusterResourceWhitelist[] | select(.kind == "StorageClass")' "$platform" >/dev/null \
+  || fail "platform AppProject cannot create the default StorageClass"
 
 # Monitoring is an Application, not a Terraform helm_release: chart from the
 # upstream repo, values from main, wave -2 so the app ApplicationSet waits for
@@ -104,6 +106,10 @@ yq -e '.spec.syncPolicy.syncOptions[] | select(. == "ServerSideApply=true")' "$m
   || fail "monitoring prunes stateful resources"
 [ -f argocd/addons/monitoring/values-staging.yaml ] \
   || fail "missing monitoring values"
+yq -e '.provisioner == "ebs.csi.aws.com"' argocd/clusters/staging/addons/storageclass.yaml >/dev/null \
+  || fail "StorageClass is not the EBS CSI provisioner"
+[ "$(yq -r '.metadata.annotations["storageclass.kubernetes.io/is-default-class"]' argocd/clusters/staging/addons/storageclass.yaml)" = "true" ] \
+  || fail "StorageClass is not the default"
 [ "$(yq -r '.prometheus.prometheusSpec.retention' argocd/addons/monitoring/values-staging.yaml)" = "15d" ] \
   || fail "prometheus retention is not set"
 [ "$(yq -r '.grafana.enabled' argocd/addons/monitoring/values-staging.yaml)" = "false" ] \
