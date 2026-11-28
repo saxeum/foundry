@@ -120,6 +120,12 @@ yq -e '.provisioner == "ebs.csi.aws.com"' argocd/clusters/staging/addons/storage
   || fail "Alertmanager service account is not annotated with the IRSA role"
 yq -e '.alertmanager.config.receivers[] | select(.name == "sns") | .sns_configs[0].topic_arn == "arn:aws:sns:ap-southeast-2:619071335809:foundry-alerts"' argocd/addons/monitoring/values-staging.yaml >/dev/null \
   || fail "Alertmanager has no SNS receiver for foundry-alerts"
+[ "$(yq -r '.alertmanager.config.receivers[] | select(.name == "sns") | .sns_configs[0].subject' argocd/addons/monitoring/values-staging.yaml)" = "Foundry alert" ] \
+  || fail "SNS receiver has no acceptable Subject"
+[ "$(yq -r '.kubeScheduler.enabled' argocd/addons/monitoring/values-staging.yaml)" = "false" ] \
+  || fail "EKS has no kube-scheduler to scrape"
+[ "$(yq -r '.defaultRules.rules.kubeSchedulerAlerting' argocd/addons/monitoring/values-staging.yaml)" = "false" ] \
+  || fail "KubeSchedulerDown rules are still enabled"
 
 # One registry file and one AppProject per app, and they agree.
 for registry in argocd/apps/*.yaml; do

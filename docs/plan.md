@@ -857,8 +857,10 @@ monitoring` is Synced/Healthy and the `monitoring.coreos.com` CRDs exist.
 `terraform/edge` creates `foundry-alertmanager` (IRSA for
 `system:serviceaccount:monitoring:alertmanager`, `sns:Publish` on
 `foundry-alerts` only). The monitoring values annotate that service account and
-route Alertmanager to the SNS receiver; `environments/staging` turns on
-`serviceMonitor` and `prometheusRule`.
+route Alertmanager to the SNS receiver with a short static subject; the
+control-plane components EKS does not expose (scheduler, controller-manager,
+etcd, kube-proxy, API server) and their rule groups are off. `environments/staging`
+turns on `serviceMonitor` and `prometheusRule`.
 
 ```
 promtool check rules charts/app-api/templates/prometheusrule.yaml
