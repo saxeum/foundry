@@ -17,9 +17,9 @@ ingress:
     bucket: ""
     prefix: foundry
 
-# Turned on in P7, when the monitoring CRDs exist.
+# The monitoring CRDs exist and the Application is Healthy.
 serviceMonitor:
-  enabled: false
+  enabled: true
 
 prometheusRule:
-  enabled: false
+  enabled: true

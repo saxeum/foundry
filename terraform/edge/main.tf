@@ -20,10 +20,21 @@ data "terraform_remote_state" "cluster" {
   }
 }
 
+data "terraform_remote_state" "alerts" {
+  backend = "s3"
+
+  config = {
+    bucket = "${var.project}-terraform-state-${data.aws_caller_identity.current.account_id}"
+    key    = "alerts/terraform.tfstate"
+    region = var.aws_region
+  }
+}
+
 locals {
-  oidc_issuer = data.terraform_remote_state.cluster.outputs.oidc_issuer
-  oidc_host   = replace(local.oidc_issuer, "https://", "")
-  lbc_sa      = "system:serviceaccount:kube-system:aws-load-balancer-controller"
+  oidc_issuer     = data.terraform_remote_state.cluster.outputs.oidc_issuer
+  oidc_host       = replace(local.oidc_issuer, "https://", "")
+  lbc_sa          = "system:serviceaccount:kube-system:aws-load-balancer-controller"
+  alertmanager_sa = "system:serviceaccount:monitoring:alertmanager"
 }
 
 # ---- AWS Load Balancer Controller ------------------------------------------
@@ -399,4 +410,51 @@ resource "aws_wafv2_web_acl_logging_configuration" "edge" {
   }
 
   depends_on = [aws_cloudwatch_log_resource_policy.waf_logs]
+}
+
+# ---- Alertmanager -> SNS ---------------------------------------------------
+#
+# The same IRSA pattern as the load balancer controller: one service account in
+# one namespace, one action on one topic. The monitoring chart annotates the
+# Alertmanager service account with this role.
+
+data "aws_iam_policy_document" "alertmanager_assume" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [data.terraform_remote_state.cluster.outputs.oidc_provider_arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_host}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_host}:sub"
+      values   = [local.alertmanager_sa]
+    }
+  }
+}
+
+resource "aws_iam_role" "alertmanager" {
+  name               = "${var.project}-alertmanager"
+  assume_role_policy = data.aws_iam_policy_document.alertmanager_assume.json
+}
+
+data "aws_iam_policy_document" "alertmanager" {
+  statement {
+    actions   = ["sns:Publish"]
+    resources = [data.terraform_remote_state.alerts.outputs.topic_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "alertmanager" {
+  name   = "${var.project}-alertmanager"
+  role   = aws_iam_role.alertmanager.id
+  policy = data.aws_iam_policy_document.alertmanager.json
 }

@@ -27,3 +27,8 @@ output "app_hostname_record" {
   description = "Where the app hostname points once alb_hostname is set."
   value       = var.alb_hostname == "" ? "(not set yet: apply the first Ingress, then pass its hostname as alb_hostname)" : "CNAME ${var.app_hostname} -> ${var.alb_hostname} (grey)"
 }
+
+output "alertmanager_role_arn" {
+  description = "IRSA role Alertmanager uses to publish to foundry-alerts."
+  value       = aws_iam_role.alertmanager.arn
+}

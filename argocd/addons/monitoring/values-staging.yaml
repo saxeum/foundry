@@ -31,6 +31,34 @@ prometheus:
               storage: 20Gi
 
 alertmanager:
+  serviceAccount:
+    create: true
+    name: alertmanager
+    annotations:
+      # Terraform edge creates this role with sns:Publish on foundry-alerts only.
+      eks.amazonaws.com/role-arn: arn:aws:iam::619071335809:role/foundry-alertmanager
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      receiver: sns
+      group_by: [namespace, alertname]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      routes:
+        # The watchdog is a heartbeat, not an incident.
+        - receiver: "null"
+          matchers:
+            - alertname = "Watchdog"
+    receivers:
+      - name: "null"
+      - name: sns
+        sns_configs:
+          - topic_arn: arn:aws:sns:ap-southeast-2:619071335809:foundry-alerts
+            sigv4:
+              region: ap-southeast-2
+            send_resolved: true
   alertmanagerSpec:
     replicas: 1
     retention: 120h
@@ -46,9 +74,9 @@ alertmanager:
           resources:
             requests:
               storage: 5Gi
-  # No receiver yet. SNS wiring (IRSA role for this service account plus the
-  # topic ARN) is P7b; until then alerts are visible in the Alertmanager UI and
-  # go nowhere else.
+  # The role is IRSA; the service account annotation above is what supplies the
+  # credentials. The topic is foundry-alerts, and the role cannot publish
+  # anywhere else.
 
 grafana:
   # No ingress and no auth story. The chart's default admin password on a
