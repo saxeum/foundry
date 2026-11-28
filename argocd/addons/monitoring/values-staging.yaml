@@ -56,6 +56,9 @@ alertmanager:
       - name: sns
         sns_configs:
           - topic_arn: arn:aws:sns:ap-southeast-2:619071335809:foundry-alerts
+            # SNS rejects the notifier's generated subject. A short static one
+            # is valid; the alert name is in the body.
+            subject: "Foundry alert"
             sigv4:
               region: ap-southeast-2
             send_resolved: true
@@ -96,3 +99,29 @@ kubeStateMetrics:
 
 nodeExporter:
   enabled: true
+
+# EKS runs the control plane; there is no kube-scheduler, controller-manager,
+# etcd, kube-proxy or API server to scrape from inside the cluster. Leaving
+# these on creates Services in kube-system and false *Down alerts.
+kubeScheduler:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false
+kubeApiServer:
+  enabled: false
+
+defaultRules:
+  rules:
+    etcd: false
+    kubeApiserverAvailability: false
+    kubeApiserverBurnrate: false
+    kubeApiserverHistogram: false
+    kubeApiserverSlos: false
+    kubeControllerManager: false
+    kubeProxy: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
