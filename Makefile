@@ -11,13 +11,15 @@ CHARTS := charts/app-api charts/app-web
 
 STACK ?=
 TF_ARGS ?=
+APP ?=
+ENV ?= staging
 
 # Host targets read .env when it exists. Containers do not use this file; the
 # chart injects PORT and the Secret injects DATABASE_URL. set -a is what makes
 # TF_VAR_* and CLOUDFLARE_API_TOKEN visible to Terraform.
 LOAD_ENV := set -a; if [ -f .env ]; then . ./.env; fi; set +a
 
-.PHONY: help fmt fmt-check validate init plan apply charts-lint charts-test check-argocd platform-go-lint platform-go-test template-test new-app eks-tunnel eks-kubeconfig
+.PHONY: help fmt fmt-check validate init plan apply charts-lint charts-test check-argocd platform-go-lint platform-go-test template-test scripts-lint new-app onboard-app rds-tunnel eks-tunnel eks-kubeconfig
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z0-9_.-]+:.*## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*## "}; {printf "  %-20s %s\n", $$1, $$2}'
@@ -71,9 +73,23 @@ template-test: ## Test the template in place: unit, generated code, chart confor
 	cd templates/app && make codegen-check
 	cd templates/app && make conformance APP=demo
 
+scripts-lint: ## Syntax-check every script
+	@for f in scripts/*.sh; do bash -n "$$f" || exit 1; done
+
 new-app: ## Instantiate the template: make new-app NAME=demo
 	@test -n "$(NAME)" || { echo "usage: make new-app NAME=<name>"; exit 1; }
 	./scripts/new-app.sh $(NAME)
+
+onboard-app: ## [host] Onboard APP into ENV: make onboard-app APP=app1 ENV=staging
+	@test -n "$(APP)" || { echo "usage: make onboard-app APP=<app> ENV=dev|staging"; exit 1; }
+	$(LOAD_ENV); ./scripts/onboard-app.sh $(APP) $(ENV)
+
+rds-tunnel: ## [host] Forward ENV RDS Postgres to 127.0.0.1:15432
+	@$(LOAD_ENV); target=$$(terraform -chdir=terraform/cluster output -raw bastion_instance_id); \
+	 host=$$(terraform -chdir=terraform/data output -json db_endpoints | jq -r --arg e "$(ENV)" '.[$$e]'); \
+	 [ -n "$$host" ] && [ "$$host" != "null" ] || { echo "no RDS endpoint for ENV=$(ENV)"; exit 1; }; \
+	 echo "forwarding $$host:5432 to 127.0.0.1:15432 through $$target; leave this running"; \
+	 aws ssm start-session --region $(AWS_REGION) --target "$$target" --document-name AWS-StartPortForwardingSessionToRemoteHost --parameters host="$$host",portNumber="5432",localPortNumber="15432"
 
 # The EKS API is private. This is the only way to reach it from a laptop; leave
 # it running in its own terminal.

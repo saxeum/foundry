@@ -56,3 +56,6 @@ jobs:
 
       - name: Template tests
         run: make template-test
+
+      - name: Script syntax
+        run: make scripts-lint

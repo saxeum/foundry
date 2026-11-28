@@ -438,7 +438,21 @@ The app repo is `app1`, created from `templates/app`. The onboarding procedure i
 1. Create `saxeum/app1` from the template.
 2. Set `AWS_PUSH_ROLE_ARN` and `ECR_REGISTRY` on the app repo from the registry
    outputs.
-3. Run `scripts/onboard-app.sh app1` for each environment, over the tunnel.
+3. Onboard each environment. In one terminal:
+
+```
+make rds-tunnel ENV=staging
+```
+
+   In another:
+
+```
+make onboard-app APP=app1 ENV=staging
+```
+
+   Repeat with `ENV=dev`. This creates the `app1` database and
+   `app1_owner`/`app1_app` roles, and the `<app>-api`, `<app>-owner` and
+   `foundry-rds-ca` Secrets in the app namespace.
 4. Add `argocd/apps/app1.yaml` and
    `argocd/clusters/staging/projects/app1.yaml`; merge.
 5. Push the first image. The dev digest PR opens; it auto-merges on the one path.
