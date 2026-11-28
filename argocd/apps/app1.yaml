@@ -5,8 +5,9 @@ namespace: app1
 tier: internal
 chartVersion: "0.4.0"
 host: app1.foonix.net
-# app1 is API-only: it has no deploy/web/ in its repository. Flip this to true
-# in the same PR that adds them, or the web source fails on a missing value file.
-web: false
+# app1 has a SPA in ui/, published as app1-web, with deploy/web/values*.yaml
+# carrying the digests. The web source is the fourth one; its ingress joins the
+# same ALB group with `/` behind the api's `/api`.
+web: true
 database: app1
 owners: [saxeum]
