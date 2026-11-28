@@ -119,9 +119,15 @@ data "aws_iam_policy_document" "push_assume" {
     }
 
     condition {
-      test     = "StringEquals"
+      # GitHub's immutable subject appends the owner and repository ids. Accept
+      # both it and the legacy name-only form; the branch stays exact.
+      test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_owner}/${each.key}:ref:refs/heads/main"]
+
+      values = [
+        "repo:${var.github_owner}/${each.key}:ref:refs/heads/main",
+        "repo:${var.github_owner}@${var.github_owner_id}/${each.key}@*:ref:refs/heads/main",
+      ]
     }
   }
 }
