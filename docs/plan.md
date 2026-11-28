@@ -516,6 +516,12 @@ root's definitions. Prune stays off where a bad values key would delete an
 Ingress; the deliberate act is `make argocd-prune APP=…`, which says so. Retry
 limit 5 with backoff.
 
+`CreateNamespace` is off, and with it `managedNamespaceMetadata`: creating a
+Namespace is a cluster-scoped write and the app project allows none. `make
+onboard-app` creates `<app>-<env>` and labels it for restricted PSA before the
+registry entry exists, so a registry entry with no onboarding fails to sync —
+which is the correct failure, not a missing permission.
+
 ### 9.4 Skew check
 
 `scripts/skew-check.sh` asserts, for every registry entry, that the app's

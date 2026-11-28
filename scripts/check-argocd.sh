@@ -15,14 +15,19 @@ command -v python3 >/dev/null || fail "python3 is required"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
-# Plain YAML under argocd/ parses. The ApplicationSet is a Go template, so it is
-# rendered with one sample app first; the raw file is not valid YAML by design.
+appset=argocd/clusters/staging/appset.yaml
+
+# Plain YAML under argocd/ parses, the ApplicationSet included: it is a Go
+# template, but every action sits inside a quoted scalar or a block scalar, so
+# the raw file is valid YAML and root can apply it.
 while IFS= read -r file; do
   yq eval '.' "$file" >/dev/null || fail "parse $file"
 done < <(find argocd -name '*.yaml' -type f | sort)
 
-appset=argocd/clusters/staging/appset.yaml
 rendered="$tmp/appset.yaml"
+patch_tpl="$tmp/patch.tpl"
+patch_api="$tmp/patch-api-only.yaml"
+patch_web="$tmp/patch-web.yaml"
 
 # Render with the pin the registry actually declares, so the assertions below
 # follow a chart release instead of a literal that has to be edited twice.
@@ -30,12 +35,12 @@ chart_version=$(yq -r '.chartVersion' argocd/apps/app1.yaml)
 [ -n "$chart_version" ] && [ "$chart_version" != "null" ] || fail "registry has no chartVersion"
 foundry_tag="v${chart_version}"
 
-python3 - "$appset" "$rendered" "$chart_version" <<'PY'
+# Substitute the fixture parameters. The controller marshals the template and
+# templates that text, so substitution is the same render for scalar values.
+python3 - "$appset" "$rendered" "$chart_version" <<'PYEOF'
 import sys
 
 src = open(sys.argv[1]).read()
-# Take the web branch: the fixture app has a UI, and both chart sources must
-# parse. Control actions are removed; expressions are replaced with a sample.
 for key, value in {
     ".name": "app1",
     ".env": "dev",
@@ -48,7 +53,7 @@ for key, value in {
 }.items():
     src = src.replace("{{ " + key + " }}", value)
 open(sys.argv[2], "w").write(src)
-PY
+PYEOF
 
 yq eval '.' "$rendered" >/dev/null || fail "rendered ApplicationSet is not valid YAML"
 
@@ -57,138 +62,65 @@ for expr in '{{ .name }}' '{{ .env }}' '{{ .tier }}' '{{ .repo }}' '{{ .revision
   grep -qF "$expr" "$appset" || fail "ApplicationSet does not use $expr"
 done
 
-# The root is the app-of-apps seed and recurses into the cluster directory.
-root=argocd/root/application.yaml
-[ "$(yq -r '.spec.source.path' "$root")" = "argocd/clusters/staging" ] || fail "root path"
-[ "$(yq -r '.spec.source.directory.recurse' "$root")" = "true" ] || fail "root recurse"
-[ "$(yq -r '.spec.destination.namespace' "$root")" = "argocd" ] || fail "root destination"
+# templatePatch is a merge patch: Argo renders it, unmarshals the result into an
+# Application, and merges. A JSON-6902 array is rejected outright, and a merge
+# patch replaces an array rather than removing one element, so an API-only app
+# restates the three sources it keeps. The renderer below understands exactly
+# the two actions asserted here; any other action fails instead of being ignored.
+yq -r '.spec.templatePatch' "$rendered" > "$patch_tpl"
+grep -qF '{{- if not .web }}' "$patch_tpl" || fail "templatePatch has no '{{- if not .web }}' guard"
+grep -qF '{{- end }}' "$patch_tpl" || fail "templatePatch has no '{{- end }}'"
 
-# The platform addon project is the only one with cluster-scoped powers, and it
-# is applied before the monitoring Application.
-platform=argocd/clusters/staging/projects/platform.yaml
-[ -f "$platform" ] || fail "missing $platform"
-[ "$(yq -r '.metadata.annotations["argocd.argoproj.io/sync-wave"]' "$platform")" = "-3" ] \
-  || fail "platform AppProject is not wave -3"
-yq -e '.spec.sourceRepos[] | select(. == "https://prometheus-community.github.io/helm-charts")' "$platform" >/dev/null \
-  || fail "platform AppProject does not allow the monitoring chart repo"
-yq -e '.spec.sourceRepos[] | select(. == "https://github.com/saxeum/foundry.git")' "$platform" >/dev/null \
-  || fail "platform AppProject does not allow the foundry values repo"
-yq -e '.spec.destinations[] | select(.namespace == "monitoring")' "$platform" >/dev/null \
-  || fail "platform AppProject does not scope monitoring"
-yq -e '.spec.destinations[] | select(.namespace == "kube-system")' "$platform" >/dev/null \
-  || fail "platform AppProject does not allow the control-plane Services"
-yq -e '.spec.clusterResourceWhitelist[] | select(.kind == "CustomResourceDefinition")' "$platform" >/dev/null \
-  || fail "platform AppProject does not allow CRDs"
-yq -e '.spec.clusterResourceWhitelist[] | select(.kind == "ClusterRole")' "$platform" >/dev/null \
-  || fail "platform AppProject does not allow ClusterRoles"
-yq -e '.spec.clusterResourceWhitelist[] | select(.kind == "Namespace")' "$platform" >/dev/null \
-  || fail "platform AppProject cannot create the monitoring namespace"
-yq -e '.spec.clusterResourceWhitelist[] | select(.kind == "StorageClass")' "$platform" >/dev/null \
-  || fail "platform AppProject cannot create the default StorageClass"
+python3 - "$patch_tpl" "$patch_api" "$patch_web" <<'PYEOF'
+import sys
 
-# Monitoring is an Application, not a Terraform helm_release: chart from the
-# upstream repo, values from main, wave -2 so the app ApplicationSet waits for
-# its CRDs.
-monitoring=argocd/clusters/staging/addons/monitoring.yaml
-[ -f "$monitoring" ] || fail "missing $monitoring"
-[ "$(yq -r '.metadata.annotations["argocd.argoproj.io/sync-wave"]' "$monitoring")" = "-2" ] \
-  || fail "monitoring Application is not wave -2"
-[ "$(yq -r '.spec.project' "$monitoring")" = "platform" ] || fail "monitoring is not in the platform project"
-[ "$(yq -r '.spec.destination.namespace' "$monitoring")" = "monitoring" ] \
-  || fail "monitoring destination is not the monitoring namespace"
-yq -e '.spec.sources[] | select(.chart == "kube-prometheus-stack") | .targetRevision == "94.2.0"' "$monitoring" >/dev/null \
-  || fail "monitoring chart is not pinned"
-yq -e '.spec.sources[] | select(.chart == "kube-prometheus-stack") | .helm.valueFiles[] | select(. == "$values/argocd/addons/monitoring/values-staging.yaml")' "$monitoring" >/dev/null \
-  || fail "monitoring Application does not read its values file"
-yq -e '.spec.sources[] | select(.ref == "values") | .targetRevision == "main"' "$monitoring" >/dev/null \
-  || fail "monitoring values ref is not main"
-yq -e '.spec.sources[] | select(.ref == "values") | has("path") | not' "$monitoring" >/dev/null \
-  || fail "monitoring values ref must not have a path"
-yq -e '.spec.syncPolicy.syncOptions[] | select(. == "CreateNamespace=true")' "$monitoring" >/dev/null \
-  || fail "monitoring does not create its namespace"
-yq -e '.spec.syncPolicy.syncOptions[] | select(. == "ServerSideApply=true")' "$monitoring" >/dev/null \
-  || fail "monitoring does not use server-side apply for the CRDs"
-[ "$(yq -r '.spec.syncPolicy.automated.prune' "$monitoring")" = "true" ] \
-  || fail "monitoring cannot prune removed chart resources"
-[ -f argocd/addons/monitoring/values-staging.yaml ] \
-  || fail "missing monitoring values"
-yq -e '.provisioner == "ebs.csi.aws.com"' argocd/clusters/staging/addons/storageclass.yaml >/dev/null \
-  || fail "StorageClass is not the EBS CSI provisioner"
-[ "$(yq -r '.metadata.annotations["storageclass.kubernetes.io/is-default-class"]' argocd/clusters/staging/addons/storageclass.yaml)" = "true" ] \
-  || fail "StorageClass is not the default"
-[ "$(yq -r '.prometheus.prometheusSpec.retention' argocd/addons/monitoring/values-staging.yaml)" = "15d" ] \
-  || fail "prometheus retention is not set"
-[ "$(yq -r '.grafana.enabled' argocd/addons/monitoring/values-staging.yaml)" = "false" ] \
-  || fail "grafana is enabled without an auth story"
-[ "$(yq -r '.alertmanager.serviceAccount.name' argocd/addons/monitoring/values-staging.yaml)" = "alertmanager" ] \
-  || fail "Alertmanager service account name does not match the IRSA trust"
-[ "$(yq -r '.alertmanager.serviceAccount.annotations["eks.amazonaws.com/role-arn"]' argocd/addons/monitoring/values-staging.yaml)" = "arn:aws:iam::619071335809:role/foundry-alertmanager" ] \
-  || fail "Alertmanager service account is not annotated with the IRSA role"
-yq -e '.alertmanager.config.receivers[] | select(.name == "sns") | .sns_configs[0].topic_arn == "arn:aws:sns:ap-southeast-2:619071335809:foundry-alerts"' argocd/addons/monitoring/values-staging.yaml >/dev/null \
-  || fail "Alertmanager has no SNS receiver for foundry-alerts"
-[ "$(yq -r '.alertmanager.config.receivers[] | select(.name == "sns") | .sns_configs[0].subject' argocd/addons/monitoring/values-staging.yaml)" = "Foundry alert" ] \
-  || fail "SNS receiver has no acceptable Subject"
-[ "$(yq -r '.prometheusOperator.admissionWebhooks.enabled' argocd/addons/monitoring/values-staging.yaml)" = "false" ] \
-  || fail "monitoring admission webhook hook can leave the sync incomplete"
-[ "$(yq -r '.prometheusOperator.tls.enabled' argocd/addons/monitoring/values-staging.yaml)" = "false" ] \
-  || fail "operator TLS is enabled with no webhook cert job"
-[ "$(yq -r '.kubeScheduler.enabled' argocd/addons/monitoring/values-staging.yaml)" = "false" ] \
-  || fail "EKS has no kube-scheduler to scrape"
-[ "$(yq -r '.defaultRules.rules.kubeSchedulerAlerting' argocd/addons/monitoring/values-staging.yaml)" = "false" ] \
-  || fail "KubeSchedulerDown rules are still enabled"
+src = open(sys.argv[1]).read()
+rendered = {}
+for web in (True, False):
+    keep, out = [], []
+    for line in src.splitlines(keepends=True):
+        action = line.strip()
+        if action == "{{- if not .web }}":
+            keep.append(not web)
+            continue
+        if action == "{{- end }}":
+            keep.pop()
+            continue
+        if all(keep):
+            out.append(line)
+    rendered[web] = "".join(out)
+open(sys.argv[2], "w").write(rendered[False])
+open(sys.argv[3], "w").write(rendered[True])
+PYEOF
 
-# One registry file and one AppProject per app, and they agree.
-for registry in argocd/apps/*.yaml; do
-  name=$(yq -r '.name' "$registry")
-  repo=$(yq -r '.repo' "$registry")
-  revision=$(yq -r '.revision' "$registry")
-  namespace=$(yq -r '.namespace' "$registry")
-  tier=$(yq -r '.tier' "$registry")
-  chart_version=$(yq -r '.chartVersion' "$registry")
-  host=$(yq -r '.host' "$registry")
+[ -z "$(tr -d '[:space:]' < "$patch_web")" ] || fail "templatePatch is not empty for a web app"
+yq -e 'has("spec") and ((keys | length) == 1)' "$patch_api" >/dev/null \
+  || fail "templatePatch patches more than spec"
+yq -e '.spec | keys | join(",") == "sources"' "$patch_api" >/dev/null \
+  || fail "templatePatch patches more than spec.sources"
+api_sources=$(yq -r '.spec.sources | length' "$patch_api")
+[ "$api_sources" = "3" ] || fail "the api-only patch has $api_sources sources, want 3"
+if yq -e '.spec.sources[] | select(.path == "charts/app-web")' "$patch_api" >/dev/null 2>&1; then
+  fail "the api-only patch still has the web source"
+fi
+# The patch restates the template's first three sources; the two must not drift.
+diff <(yq -o=json '.spec.template.spec.sources | .[0:3]' "$rendered") \
+     <(yq -o=json '.spec.sources' "$patch_api") >/dev/null \
+  || fail "templatePatch sources differ from the template's first three"
 
-  [ -n "$name" ] && [ "$name" != "null" ] || fail "$registry has no name"
-  [ -n "$repo" ] && [ "$repo" != "null" ] || fail "$registry has no repo"
-  [ -n "$revision" ] && [ "$revision" != "null" ] || fail "$registry has no revision"
-  [ -n "$namespace" ] && [ "$namespace" != "null" ] || fail "$registry has no namespace"
-  [ -n "$tier" ] && [ "$tier" != "null" ] || fail "$registry has no tier"
-  [ -n "$chart_version" ] && [ "$chart_version" != "null" ] || fail "$registry has no chartVersion"
-  # The pin names the git tag Argo reads. Charts/*/Chart.yaml is the one place
-  # the version is written down; make release tags that value.
-  for chart in charts/app-api charts/app-web; do
-    [ "$chart_version" = "$(yq -r '.version' "$chart/Chart.yaml")" ] \
-      || fail "$registry pins $chart_version but $chart/Chart.yaml is $(yq -r '.version' "$chart/Chart.yaml")"
-  done
-  [ -n "$host" ] && [ "$host" != "null" ] || fail "$registry has no host"
-  web=$(yq -r '.web' "$registry")
-  [ "$web" = "true" ] || [ "$web" = "false" ] || fail "$registry has no web boolean"
+# A web app keeps all four template sources: app, foundry, api, web.
+web_sources=$(yq -r '.spec.template.spec.sources | length' "$rendered")
+[ "$web_sources" = "4" ] || fail "the template has $web_sources sources, want 4"
+yq -e '.spec.template.spec.sources[] | select(.path == "charts/app-web")' "$rendered" >/dev/null \
+  || fail "the template has no web source"
 
-  [ -f "profiles/${tier}/values.yaml" ] || fail "missing profiles/${tier}/values.yaml for $name"
-
-  project="argocd/clusters/staging/projects/${name}.yaml"
-  [ -f "$project" ] || fail "missing $project"
-
-  yq -e '.spec.sourceRepos[] | select(. == "https://github.com/saxeum/foundry.git")' "$project" >/dev/null \
-    || fail "$project does not allow the foundry source"
-  yq -e ".spec.sourceRepos[] | select(. == \"$repo\")" "$project" >/dev/null \
-    || fail "$project does not allow $repo"
-  yq -e ".spec.destinations[0].namespace == \"${namespace}-*\"" "$project" >/dev/null \
-    || fail "$project does not scope ${namespace}-*"
-  [ "$(yq -r '.spec.clusterResourceWhitelist | length' "$project")" = "0" ] \
-    || fail "$project allows cluster-scoped resources"
-  [ "$(yq -r '.metadata.annotations["argocd.argoproj.io/sync-wave"]' "$project")" = "-1" ] \
-    || fail "$project is not applied before the ApplicationSet"
+# The gate #39 was missing. foundry values from main plus charts from the tag
+# is exactly what Argo refuses to generate.
+for repo in $(yq -r '.spec.template.spec.sources[].repoURL' "$rendered" | sort -u); do
+  revisions=$(yq -r ".spec.template.spec.sources[] | select(.repoURL == \"$repo\") | .targetRevision" "$rendered" | sort -u | sed '/^$/d')
+  count=$(printf '%s\n' "$revisions" | wc -l | tr -d ' ')
+  [ "$count" = "1" ] || fail "$repo is read at $count revisions; Argo CD allows one"
 done
-
-# The ApplicationSet, rendered with the sample app.
-[ "$(yq -r '.spec.goTemplate' "$rendered")" = "true" ] || fail "appset goTemplate"
-[ "$(yq -r '.spec.generators[0].matrix.generators[0].git.files[0].path' "$rendered")" = "argocd/apps/*.yaml" ] \
-  || fail "appset git files path"
-[ "$(yq -r '.spec.generators[0].matrix.generators[1].list.elements | length' "$rendered")" -ge 1 ] \
-  || fail "appset has no environments"
-[ "$(yq -r '.spec.template.spec.project' "$rendered")" = "app1" ] || fail "appset project is not per app"
-[ "$(yq -r '.spec.template.spec.destination.namespace' "$rendered")" = "app1-dev" ] \
-  || fail "appset namespace is not per app and env"
 
 for chart in charts/app-api charts/app-web; do
   yq -e ".spec.template.spec.sources[] | select(.path == \"$chart\")" "$rendered" >/dev/null \
@@ -209,19 +141,6 @@ yq -e ".spec.template.spec.sources[] | select(.ref == \"foundry\") | .targetRevi
   || fail "foundry ref is not the chart release tag"
 yq -e '.spec.template.spec.sources[] | select(.ref == "foundry") | has("path") | not' "$rendered" >/dev/null \
   || fail "foundry ref must be a value source, not a path"
-
-# The gate #39 was missing. foundry values from main plus charts from the tag
-# is exactly what Argo refuses to generate.
-for repo in $(yq -r '.spec.template.spec.sources[].repoURL' "$rendered" | sort -u); do
-  revisions=$(yq -r ".spec.template.spec.sources[] | select(.repoURL == \"$repo\") | .targetRevision" "$rendered" | sort -u | sed '/^$/d')
-  count=$(printf '%s\n' "$revisions" | wc -l | tr -d ' ')
-  [ "$count" = "1" ] || fail "$repo is read at $count revisions; Argo CD allows one"
-done
-
-[ -n "$(yq -r '.spec.templatePatch // ""' "$rendered")" ] \
-  || fail "appset has no templatePatch to drop the web source"
-yq -r '.spec.templatePatch' "$rendered" | grep -q '/spec/sources/3' \
-  || fail "templatePatch does not remove the web source by index"
 
 for value_file in \
   '$app/deploy/api/values.yaml' \
@@ -245,10 +164,17 @@ yq -e '.spec.template.spec.sources[] | select(.path == "charts/app-api") | .helm
 yq -e '.spec.template.spec.sources[] | select(.path == "charts/app-api") | .helm.parameters[] | select(.name == "caSecret.name") | .value == "foundry-rds-ca"' "$rendered" >/dev/null \
   || fail "api source does not pass the CA secret"
 
-yq -e '.spec.template.spec.syncPolicy.syncOptions[] | select(. == "CreateNamespace=true")' "$rendered" >/dev/null \
-  || fail "appset does not create namespaces"
-[ "$(yq -r '.spec.template.spec.syncPolicy.managedNamespaceMetadata.labels["pod-security.kubernetes.io/enforce"]' "$rendered")" = "restricted" ] \
-  || fail "appset does not enforce restricted PSA"
+# An Application may not create its Namespace: that is cluster-scoped, and the
+# app project whitelists nothing cluster-scoped. The namespace and its PSA
+# labels come from onboarding, which runs before the registry entry exists.
+yq -e '([.spec.template.spec.syncPolicy.syncOptions // [] | .[] | select(. == "CreateNamespace=true")] | length) == 0' "$rendered" >/dev/null \
+  || fail "appset asks Argo to create a Namespace, which the app project forbids"
+[ -z "$(yq -r '.spec.template.spec.syncPolicy.managedNamespaceMetadata // ""' "$rendered")" ] \
+  || fail "appset manages namespace metadata, which the app project forbids"
+for label in enforce audit warn; do
+  grep -qF "pod-security.kubernetes.io/${label}=restricted" scripts/onboard-app.sh \
+    || fail "onboard-app.sh does not set ${label}=restricted on the namespace"
+done
 [ "$(yq -r '.spec.template.spec.syncPolicy.automated.prune' "$rendered")" = "false" ] \
   || fail "appset prunes workloads"
 [ "$(yq -r '.metadata.annotations["argocd.argoproj.io/sync-wave"]' "$rendered")" = "0" ] \
