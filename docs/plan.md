@@ -522,10 +522,10 @@ every platform PR. A mismatch is a failed build, not a surprise rollout.
 The root also applies a platform AppProject at wave `-3` and the monitoring
 Application at wave `-2`. The project is the only one with a
 `clusterResourceWhitelist`, and it lists only what the chart actually creates:
-CRDs, ClusterRoles/Bindings, webhooks and the `Namespace` that Argo's
-`CreateNamespace` task creates. Its destinations are `monitoring` and
-`kube-system`; the chart renders the control-plane scrape Services in the
-latter.
+CRDs, ClusterRoles/Bindings, webhooks, the `Namespace` that Argo's
+`CreateNamespace` task creates, and the default `gp3` StorageClass the EBS CSI
+driver needs. Its destinations are `monitoring` and `kube-system`; the chart
+renders the control-plane scrape Services in the latter.
 The root waits for the monitoring Application to be Healthy before creating the
 app ApplicationSet at wave `0`, so the `ServiceMonitor` and `PrometheusRule`
 CRDs exist before the first app sync.

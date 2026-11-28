@@ -33,3 +33,6 @@ spec:
     # Argo's CreateNamespace=true makes the monitoring Namespace a PreSync task.
     - group: ""
       kind: Namespace
+    # The EBS CSI default StorageClass that Prometheus/Alertmanager PVCs use.
+    - group: storage.k8s.io
+      kind: StorageClass
