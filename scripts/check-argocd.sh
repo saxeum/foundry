@@ -102,8 +102,8 @@ yq -e '.spec.syncPolicy.syncOptions[] | select(. == "CreateNamespace=true")' "$m
   || fail "monitoring does not create its namespace"
 yq -e '.spec.syncPolicy.syncOptions[] | select(. == "ServerSideApply=true")' "$monitoring" >/dev/null \
   || fail "monitoring does not use server-side apply for the CRDs"
-[ "$(yq -r '.spec.syncPolicy.automated.prune' "$monitoring")" = "false" ] \
-  || fail "monitoring prunes stateful resources"
+[ "$(yq -r '.spec.syncPolicy.automated.prune' "$monitoring")" = "true" ] \
+  || fail "monitoring cannot prune removed chart resources"
 [ -f argocd/addons/monitoring/values-staging.yaml ] \
   || fail "missing monitoring values"
 yq -e '.provisioner == "ebs.csi.aws.com"' argocd/clusters/staging/addons/storageclass.yaml >/dev/null \
@@ -122,6 +122,10 @@ yq -e '.alertmanager.config.receivers[] | select(.name == "sns") | .sns_configs[
   || fail "Alertmanager has no SNS receiver for foundry-alerts"
 [ "$(yq -r '.alertmanager.config.receivers[] | select(.name == "sns") | .sns_configs[0].subject' argocd/addons/monitoring/values-staging.yaml)" = "Foundry alert" ] \
   || fail "SNS receiver has no acceptable Subject"
+[ "$(yq -r '.prometheusOperator.admissionWebhooks.enabled' argocd/addons/monitoring/values-staging.yaml)" = "false" ] \
+  || fail "monitoring admission webhook hook can leave the sync incomplete"
+[ "$(yq -r '.prometheusOperator.tls.enabled' argocd/addons/monitoring/values-staging.yaml)" = "false" ] \
+  || fail "operator TLS is enabled with no webhook cert job"
 [ "$(yq -r '.kubeScheduler.enabled' argocd/addons/monitoring/values-staging.yaml)" = "false" ] \
   || fail "EKS has no kube-scheduler to scrape"
 [ "$(yq -r '.defaultRules.rules.kubeSchedulerAlerting' argocd/addons/monitoring/values-staging.yaml)" = "false" ] \

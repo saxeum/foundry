@@ -531,8 +531,12 @@ app ApplicationSet at wave `0`, so the `ServiceMonitor` and `PrometheusRule`
 CRDs exist before the first app sync.
 
 The chart is a release tag; its values are read from `main`, like the app
-profiles and environments. Prune is off: the stack owns persistent volumes, and
-removing a resource is a deliberate act.
+profiles and environments. Prune is on for the addon: its rules, Services and
+ServiceMonitors are Argo resources and must disappear when a values key turns
+them off. The operator-created StatefulSets and PVCs are not Argo resources, so
+removing a chart resource does not delete the data volumes. The operator's
+self-signed admission webhook is off; its hook Job deletes itself and leaves
+Argo reporting a missing Job.
 
 ---
 
