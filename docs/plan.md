@@ -94,7 +94,7 @@ credentials or platform secrets.
 | Platform repo | `foundry` | `~/soper/foundry`, `github.com/saxeum/foundry` |
 | App repos | the product name | `app1`, `godough` |
 | Go module | `github.com/saxeum/foundry/go` (nested, tag `go/vX.Y.Z`) | — |
-| Chart release | platform semver tag `vX.Y.Z` | `v0.1.0` |
+| Chart release | platform semver tag `vX.Y.Z` | `v0.2.0` |
 | Chart names | generic | `app-api`, `app-web` |
 | Namespaces | `<app>-<env>` | `app1-dev`, `app1-staging` |
 | Argo Application | `<app>-<env>` | `app1-staging` |
@@ -127,7 +127,7 @@ repo: https://github.com/saxeum/app1.git
 revision: main
 namespace: app1
 tier: internal                 # poc | internal | external
-chartVersion: "0.1.0"          # platform release tag; the upgrade pin
+chartVersion: "0.2.0"          # platform release tag; the upgrade pin
 host: app1.foonix.net
 web: true                      # false omits the SPA source
 database: app1
@@ -145,7 +145,7 @@ checks the key set. The repository and digest are per component.
 ```yaml
 # deploy/api/values.yaml
 platform:
-  chartVersion: "0.1.0"        # must equal argocd/apps/app1.yaml
+  chartVersion: "0.2.0"        # must equal argocd/apps/app1.yaml
 image:
   repository: 000000000000.dkr.ecr.ap-southeast-2.amazonaws.com/app1-api
 app:
@@ -479,15 +479,19 @@ root Application (argocd/root)
   └── ApplicationSet + AppProjects (argocd/clusters/staging)
         └── <app>-<env> Application (multi-source)
               ├── app ref: app repo @ revision
-              ├── foundry ref: foundry @ main (values); charts @ v<chartVersion>
-              ├── api: charts/app-api, deploy/api/values*.yaml + profile + env
-              ├── web: charts/app-web, deploy/web/values*.yaml + profile + env
+              ├── foundry ref: foundry @ v<chartVersion> — profiles + environments
+              ├── api: charts/app-api @ v<chartVersion>, deploy/api/values*.yaml
+              ├── web: charts/app-web @ v<chartVersion>, deploy/web/values*.yaml
               └── destination: namespace <app>-<env>
 ```
 
-The chart is the release tag; `profiles/` and `environments/` are platform
-configuration and are read from `main`, so a values change does not need a chart
-release.
+One Application reads one repository at one revision: Argo CD refuses a
+revision other than the one it already resolved for a `repoURL`. So the chart,
+the profiles and the environments are all read at the release tag, and an app
+Application never mentions `main`. A profile or environment change is therefore
+a chart release — `make release` — which is the same version bump an app already
+takes to get a chart fix (DR-002), and the app's conformance render reads that
+same tag, so CI and the cluster render the same files.
 
 ### 9.2 AppProject per app
 
@@ -531,8 +535,11 @@ The root waits for the monitoring Application to be Healthy before creating the
 app ApplicationSet at wave `0`, so the `ServiceMonitor` and `PrometheusRule`
 CRDs exist before the first app sync.
 
-The chart is a release tag; its values are read from `main`, like the app
-profiles and environments. Prune is on for the addon: its rules, Services and
+The chart is a release tag and its values are read from `main`. That is legal
+here because the chart comes from the upstream Helm repository and the values
+from `foundry`: two repositories, one revision each. The app Application cannot
+do this — its chart and its values are both in `foundry` (§9.1).
+Prune is on for the addon: its rules, Services and
 ServiceMonitors are Argo resources and must disappear when a values key turns
 them off. The operator-created StatefulSets and PVCs are not Argo resources, so
 removing a chart resource does not delete the data volumes. The operator's
@@ -596,7 +603,7 @@ permission is ECR push to `<app>-*`.
 | `charts` | `helm lint`, `helm unittest`, `helm template` against every registry entry |
 | `policy` | conftest: digest, nonroot, probes, no `:latest`, PSA |
 | `argocd` | `kubeconform` on rendered manifests, `make check-argocd` |
-| `release` | on tag: nothing to publish if the chart is consumed from git; OCI push if private |
+| `release` | `make release` on `main`: tag `v<Chart.yaml version>` and push it. That tag is what every app Application reads |
 | `skew` | nightly: registry vs app pins |
 | `smoke` | post-merge: `argocd-verify`, probes, one authenticated read |
 
@@ -909,6 +916,7 @@ can fail.
 | DR-013 | Same AWS account, now empty of godough; foundry creates its own OIDC provider, GuardDuty and CloudTrail; `manage_oidc_provider` remains for brownfield | No new account; the old controls are gone | a new account (cost, no customer), a second provider (fails) |
 | DR-014 | Foundry VPC `10.20.0.0/16`, no peering | No overlap with the `10.42.0.0/16` residue | shared VPC (couples the platforms) |
 | DR-015 | `account` owns GuardDuty/CloudTrail; `alerts` owns SNS/budget | Detection is no longer inherited; split by lifecycle | one stack (a trail change risks the bucket and key) |
+| DR-016 | One revision per repository per Application: the envelope ships in the chart tag | Argo refuses two revisions of one `repoURL`; a tag is also what the app's conformance render already reads | a second values repo (a second link), OCI charts (DR-011) |
 
 ---
 

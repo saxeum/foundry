@@ -19,7 +19,7 @@ ENV ?= staging
 # TF_VAR_* and CLOUDFLARE_API_TOKEN visible to Terraform.
 LOAD_ENV := set -a; if [ -f .env ]; then . ./.env; fi; set +a
 
-.PHONY: help fmt fmt-check validate init plan apply charts-lint charts-test check-argocd platform-go-lint platform-go-test template-test scripts-lint new-app onboard-app rds-tunnel eks-tunnel eks-kubeconfig
+.PHONY: help fmt fmt-check validate init plan apply charts-lint charts-test check-argocd release platform-go-lint platform-go-test template-test scripts-lint new-app onboard-app rds-tunnel eks-tunnel eks-kubeconfig
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z0-9_.-]+:.*## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*## "}; {printf "  %-20s %s\n", $$1, $$2}'
@@ -61,6 +61,17 @@ charts-test: ## Render every chart and assert the contract
 check-argocd: ## Validate the registry, AppProjects and ApplicationSet
 	./scripts/check-argocd.sh
 
+# The tag is load-bearing. Every app Application reads the charts, the profiles
+# and the environments at one revision, so a profile or environment change is a
+# release too, not a push to main.
+release: ## [human] Tag the chart release v<Chart.yaml version> on main and push it
+	@test "$$(git rev-parse --abbrev-ref HEAD)" = "main" || { echo "tag the merge commit on main, not a branch"; exit 1; }
+	@test -z "$$(git status --porcelain)" || { echo "working tree is dirty"; exit 1; }
+	@v=$$(sed -n 's/^version: *//p' charts/app-api/Chart.yaml); \
+	 [ "$$v" = "$$(sed -n 's/^version: *//p' charts/app-web/Chart.yaml)" ] || { echo "the two charts declare different versions"; exit 1; }; \
+	 git rev-parse -q --verify "refs/tags/v$$v" >/dev/null && { echo "v$$v already exists"; exit 1; }; \
+	 git tag -a "v$$v" -m "Chart release v$$v" && git push origin "v$$v"
+
 platform-go-lint: ## Format-check and vet the foundry/go module
 	@out=$$(gofmt -l $$(find go -name '*.go' -type f)); if [ -n "$$out" ]; then echo "gofmt found unformatted files:"; echo "$$out"; exit 1; fi
 	cd go && go vet ./...
@@ -71,7 +82,7 @@ platform-go-test: ## Unit tests for the foundry/go module, with the race detecto
 template-test: ## Test the template in place: unit, generated code, chart conformance
 	cd templates/app && go test ./...
 	cd templates/app && make codegen-check
-	cd templates/app && make conformance APP=demo
+	cd templates/app && FOUNDRY_ROOT=$$(cd ../.. && pwd) make conformance APP=demo
 
 scripts-lint: ## Syntax-check every script
 	@for f in scripts/*.sh; do bash -n "$$f" || exit 1; done
