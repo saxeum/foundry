@@ -371,7 +371,8 @@ This is the fix for godough's long-lived master DSN (SEC-TODO D2), not a port of
 
 One ECR repo per image (`<app>-api`, `<app>-web`), immutable tags, scan on push,
 lifecycle: untagged 7 days, keep 20 tagged. A per-app IAM role trusting
-`repo:saxeum/<app>:ref:refs/heads/main`, scoped to `ecr:PutImage`,
+`repo:saxeum/<app>:ref:refs/heads/main` and the immutable
+`repo:saxeum@<owner-id>/<app>@*:ref:refs/heads/main`, scoped to `ecr:PutImage`,
 `InitiateLayerUpload`, `UploadLayerPart`, `CompleteLayerUpload`,
 `BatchCheckLayerAvailability` on `<app>-*` only. The role ARN is set on the app
 repo as `vars.AWS_PUSH_ROLE_ARN`.
