@@ -6,7 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 app="${APP:-__APP_NAME__}"
-version="${CHART_VERSION:-0.3.0}"
+version="${CHART_VERSION:-0.4.0}"
 
 command -v helm >/dev/null || { echo "helm is required"; exit 1; }
 

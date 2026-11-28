@@ -105,7 +105,8 @@
       "properties": {
         "enabled": { "type": "boolean" },
         "vpcCidr": { "type": "string" },
-        "ingressFromVpc": { "type": "boolean" }
+        "ingressFromVpc": { "type": "boolean" },
+        "allowHTTPS": { "type": "boolean" }
       }
     },
     "ingress": {

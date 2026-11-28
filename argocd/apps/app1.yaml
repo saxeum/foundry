@@ -3,7 +3,7 @@ repo: https://github.com/saxeum/app1.git
 revision: main
 namespace: app1
 tier: internal
-chartVersion: "0.3.0"
+chartVersion: "0.4.0"
 host: app1.foonix.net
 # app1 is API-only: it has no deploy/web/ in its repository. Flip this to true
 # in the same PR that adds them, or the web source fails on a missing value file.

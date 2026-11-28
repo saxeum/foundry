@@ -209,7 +209,7 @@ image:
   repository: example/app1-api
   digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
 platform:
-  chartVersion: "0.3.0"
+  chartVersion: "0.4.0"
 YAML
 
   cat >"$tmp/web-values.yaml" <<'YAML'
@@ -219,7 +219,7 @@ image:
   repository: example/app1-web
   digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
 platform:
-  chartVersion: "0.3.0"
+  chartVersion: "0.4.0"
 YAML
 
   for env in dev staging; do
