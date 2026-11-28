@@ -13,7 +13,7 @@ image:
   digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
 
 platform:
-  chartVersion: "0.2.0"
+  chartVersion: "0.3.0"
 
 environment: dev
 tier: internal
