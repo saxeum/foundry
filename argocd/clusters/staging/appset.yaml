@@ -92,15 +92,10 @@ spec:
           # Prune stays off where a bad values key would delete the Ingress.
           # The deliberate act is `make argocd-prune APP=...`, which says so.
           prune: false
-        syncOptions:
-          - CreateNamespace=true
-        managedNamespaceMetadata:
-          labels:
-            # The namespace is the tenancy boundary and the Pod Security
-            # Admission boundary. The charts already satisfy restricted.
-            pod-security.kubernetes.io/enforce: restricted
-            pod-security.kubernetes.io/audit: restricted
-            pod-security.kubernetes.io/warn: restricted
+        # No CreateNamespace: creating a Namespace is a cluster-scoped write and
+        # the app project's clusterResourceWhitelist is empty, which is the
+        # tenancy boundary. `make onboard-app` creates <app>-<env> and labels it
+        # for restricted PSA before the registry entry exists.
         retry:
           limit: 5
           backoff:
@@ -108,11 +103,37 @@ spec:
             factor: 2
             maxDuration: 2m
 
-  # The web source is always in the template so this manifest is valid YAML
-  # before the controller templates it. An API-only app removes it by index:
-  # sources are app, foundry, api, web.
+  # templatePatch is a merge patch, not a JSON patch: Argo renders it, unmarshals
+  # the result into an Application, and merges. A JSON-6902 "remove
+  # /spec/sources/3" is rejected, and a merge patch replaces an array rather than
+  # removing one element, so an API-only app restates the three sources it keeps.
+  # check-argocd compares them with the template's first three, so they cannot
+  # drift. A web app keeps all four and gets an empty patch.
   templatePatch: |
-    {{- if eq (toString .web) "false" }}
-    - op: remove
-      path: /spec/sources/3
+    {{- if not .web }}
+    spec:
+      sources:
+        - repoURL: '{{ .repo }}'
+          targetRevision: '{{ .revision }}'
+          ref: app
+        - repoURL: https://github.com/saxeum/foundry.git
+          targetRevision: 'v{{ .chartVersion }}'
+          ref: foundry
+        - repoURL: https://github.com/saxeum/foundry.git
+          targetRevision: 'v{{ .chartVersion }}'
+          path: charts/app-api
+          helm:
+            releaseName: '{{ .name }}-api'
+            valueFiles:
+              - '$app/deploy/api/values.yaml'
+              - '$app/deploy/api/values-{{ .env }}.yaml'
+              - '$foundry/profiles/{{ .tier }}/values.yaml'
+              - '$foundry/environments/{{ .env }}/values.yaml'
+            parameters:
+              - name: ingress.host
+                value: '{{ .host }}'
+              - name: migrations.ownerSecret.name
+                value: '{{ .name }}-owner'
+              - name: caSecret.name
+                value: foundry-rds-ca
     {{- end }}
